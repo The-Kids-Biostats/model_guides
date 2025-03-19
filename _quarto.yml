@@ -12,14 +12,15 @@ website:
       - text: "Models"
         menu:
           - text: "Linear Regression"
-            href: lm.qmd
+            href: qmds/lm.qmd
+
   sidebar:
     style: "docked"
     search: true
     contents:
       - section: "Models"
         contents:
-          - lm.qmd
+          - qmds/lm.qmd
 
 format:
   html:
