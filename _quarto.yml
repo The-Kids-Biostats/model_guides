@@ -4,7 +4,9 @@ project:
 
 website:
   title: "Model Guides for Biostatistics"
+  favicon: thekids_logo.png
   navbar:
+    logo: thekids_logo.png
     left:
       - href: index.qmd
         text: Home

@@ -1,5 +1,10 @@
-.quarto-header {
+.navbar {
     background-color: #1F3B73;
+    color: #1F3B73;
+}
+
+.sidebar {
+  background-color: #8F9DB9;
 }
 
 /* Note Callout (Azure Blue) */
