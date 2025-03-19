@@ -1,11 +1,5 @@
-.quarto-title-block .quarto-title-banner {
-  background-image: url(thekids.png);
-  background-size: 200px;
-  background-position: left;
-  background-repeat: no-repeat;
-  padding-left: 10px;
-  background-origin: content-box;
-  background-color: #1F3B73;
+.quarto-header {
+    background-color: #1F3B73;
 }
 
 /* Note Callout (Azure Blue) */
