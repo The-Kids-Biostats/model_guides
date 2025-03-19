@@ -9,6 +9,17 @@ website:
       - href: index.qmd
         text: Home
       - about.qmd
+      - text: "Models"
+        menu:
+          - text: "Linear Regression"
+            href: lm.qmd
+  sidebar:
+    style: "docked"
+    search: true
+    contents:
+      - section: "Models"
+        contents:
+          - lm.qmd
 
 format:
   html:

@@ -1,0 +1,1548 @@
+# Biostatistical Modeling Techniques in R – A Quarto Guide (Harrell’s Approach)
+
+This guide presents commonly used biostatistical modeling techniques in R, following the principles emphasized by Frank E. Harrell Jr. In his works, Harrell advocates careful **assumption checking**, using appropriate **simulation for understanding**, and **clear interpretation** of models to avoid misinterpretation ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=All%20standard%20regression%20models%20have,satisfied%2C%20overfitting%20can%20ruin%20a)) ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=into%20either%20prediction%20or%20evidence,transformation)). Each modeling method below is structured with a consistent format for ease of reference:
+
+- **Overview** – Summary of the model, typical use cases in biomedical research, and why it is preferred.
+- **Model Assumptions** – Key assumptions in bullet form (linearity, independence, etc.).
+- **Simulated Dataset** – R code using the `simstudy` package to generate a synthetic dataset (medical context when possible).
+- **Assumption Checking** – R code for tests/diagnostics to check assumptions (with explanations of what indicates good vs bad fit).
+- **Model Interpretation** – R code to fit the model and generate output, with explanation of each output component and guidance on understanding the results.
+- **Communicating Results** – Best practices for reporting and interpreting the model results for both technical and semi-technical audiences, to avoid common misinterpretations.
+
+*Note:* Throughout, we highlight advanced diagnostic methods (per Harrell’s strategies) but may not display all their outputs. The guide is written in **Quarto** (RMarkdown-compatible) so that code and outputs can be reproduced. Remember Harrell’s key message that **meeting model assumptions improves precision and validity of conclusions** ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=,transformation)) ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=,g)). Now, let's dive into each model.
+
+## Linear Regression (`lm`)
+
+### Overview 
+Linear regression is a fundamental modeling technique for continuous outcomes. It estimates the relationship between one or more predictors and a continuous response by fitting a linear equation to observed data. In biostatistics, linear models are widely used to quantify associations (e.g., effect of a treatment or risk factor on a biomarker level) and to make predictions. It’s often preferred for its simplicity and interpretability – coefficients represent the **mean change** in the outcome per unit change in the predictor, holding other variables constant. Linear regression is powerful under the right conditions (approximately linear relationships, normal residuals) and forms the basis for more complex models. Harrell emphasizes using linear regression as a starting point, but also checking whether linearity holds or if transformations/splines are needed ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=All%20standard%20regression%20models%20have,satisfied%2C%20overfitting%20can%20ruin%20a)). This model is most appropriate when the outcome is roughly continuous and unbounded (or has a range that can be treated as linear on some scale) and when the relationship with predictors is believed to be additive and linear.
+
+### Model Assumptions
+Key assumptions for linear regression must be satisfied to ensure valid inferences ([Testing the assumptions of linear regression](https://people.duke.edu/~rnau/testing.htm#:~:text=)) ([Testing the assumptions of linear regression](https://people.duke.edu/~rnau/testing.htm#:~:text=,case%20of%20time%20series%20data)):
+
+- **Linearity and Additivity**: The expected value of the outcome is a linear combination of the predictors. Each predictor has a linear effect (straight-line relationship) and effects are additive (no unmodeled interactions) ([Testing the assumptions of linear regression](https://people.duke.edu/~rnau/testing.htm#:~:text=,between%20dependent%20and%20independent%20variables)).
+- **Independent Errors**: The residuals (error terms) are independent of each other (e.g., no correlation between consecutive errors in time series) ([Testing the assumptions of linear regression](https://people.duke.edu/~rnau/testing.htm#:~:text=,case%20of%20time%20series%20data)). Each observation’s error term is drawn independently.
+- **Homoscedasticity**: The residuals have constant variance across all levels of the fitted values or predictors (no systematic change in spread) ([Testing the assumptions of linear regression](https://people.duke.edu/~rnau/testing.htm#:~:text=,the%20errors)).
+- **Normality of Errors**: The residuals are approximately normally distributed ([Testing the assumptions of linear regression](https://people.duke.edu/~rnau/testing.htm#:~:text=,case%20of%20time%20series%20data)) (this is needed for valid p-values and confidence intervals in small samples; in large samples, the Central Limit Theorem often grants robustness).
+- (Additionally) **No multicollinearity**: Predictors are not perfectly collinear; severe multicollinearity can inflate standard errors.
+- **No significant outliers/high leverage points** that violate model fit (or these are properly addressed). Outliers can unduly influence the model.
+
+Harrell specifically notes that verifying assumptions – especially linearity and additivity – is critical, and suggests using methods like **residual plots** and **splines** to detect and adjust for non-linear relationships ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=All%20standard%20regression%20models%20have,satisfied%2C%20overfitting%20can%20ruin%20a)). If assumptions are violated, the model’s estimates and p-values may be biased or inefficient ([Testing the assumptions of linear regression](https://people.duke.edu/~rnau/testing.htm#:~:text=If%20any%20of%20these%20assumptions,the%20introduction%20to%20regression%20page)).
+
+### Simulated Dataset
+We will simulate a dataset mimicking a medical study where a continuous outcome (e.g., blood pressure) depends on a continuous predictor (e.g., age) and a categorical predictor (e.g., treatment group). We use `simstudy` to define the data-generating process, ensuring the true relationship is linear to satisfy assumptions (we can later introduce violations to demonstrate checks).
+
+```r
+# Load simstudy
+library(simstudy)
+
+# 1. Define the data structure
+def <- defData(varname = "age", dist = "normal", formula = 50, variance = 100)  # age ~ Normal(50, sd=10)
+def <- defData(def, varname = "treat", dist = "binary", formula = 0.5)          # treat ~ Bernoulli(0.5) -> 0 or 1
+# Now define outcome as a linear function of age and treat
+# Suppose true systolic BP = 120 + 0.5*age + (-5)*treat + noise
+def <- defData(def, varname = "sysBP", formula = "120 + 0.5*age - 5*treat", 
+               variance = 25, dist = "normal")  # residual variance 25
+
+# 2. Generate the dataset
+set.seed(123)
+data <- genData(200, def)  # simulate 200 patients
+head(data)
+```
+
+In the code above, we first define variables:
+- `age` is normally distributed with mean 50 and variance 100 (so SD=10).
+- `treat` is a binary indicator (e.g., 0 = control, 1 = treatment) assigned with 50% probability.
+- `sysBP` (systolic blood pressure) is defined by the formula `120 + 0.5*age - 5*treat` plus Normal noise with variance 25. This means:
+  - Baseline BP ~120 for a 0-year age in control (intercept).
+  - Each additional year of age increases BP by 0.5 (slope for age).
+  - Being in treatment group (treat=1) *reduces* BP by 5 units on average compared to control (treatment effect).
+  - Random error SD is 5 (since variance 25).
+
+After generating data for 200 individuals, `head(data)` would show columns: `id` (auto-generated by simstudy), `age`, `treat`, `sysBP`. For example, you might see:
+
+```
+   id      age treat    sysBP
+1   1 60.12    1       148.3
+2   2 45.34    0       141.7
+3   3 57.81    1       150.5
+4   4 38.22    1       133.6
+5   5 52.09    0       146.0
+6   6 47.45    1       139.8
+```
+
+(These are illustrative; actual values will differ due to randomness.)
+
+### Assumption Checking
+Before fitting the linear model, we perform diagnostics to check the assumptions:
+
+**1. Linearity & Additivity:** We can create scatter plots and residual plots:
+- Plot outcome vs predictor(s) to see if relationships look roughly linear.
+- After fitting a model, plot **residuals vs fitted values** and **residuals vs each predictor** to detect non-linearity (a systematic pattern in residuals indicates model mis-specification).
+- Additionally, **component-plus-residual (partial residual) plots** can highlight non-linear patterns for each predictor in presence of others ([9 Logistic Regression | Regression Diagnostics with R](https://sscc.wisc.edu/sscc/pubs/RegDiag-R/logistic-regression.html#:~:text=9%20Logistic%20Regression%20,residual%20plots)).
+
+**2. Independence:** If data are not time-series or clustered, this is usually satisfied by design. To check, we can look at **Durbin-Watson test** for autocorrelation (for ordered data) or examine residuals for patterns over time or by ID if longitudinal.
+
+**3. Homoscedasticity:** Use a **residuals vs fitted** plot – residuals should scatter randomly with roughly equal spread across all fitted values. We can also perform Breusch-Pagan test (`lmtest::bptest`) for heteroscedasticity (null hypothesis: constant variance):
+```r
+lm_fit <- lm(sysBP ~ age + treat, data = data)
+plot(lm_fit, which = 1)  # Residuals vs Fitted plot
+library(lmtest)
+bptest(lm_fit)           # Breusch-Pagan test for homoscedasticity
+```
+If the BP test p-value is > 0.05, we do not have evidence of heteroscedasticity (good). If p < 0.05, it suggests non-constant variance (bad), meaning perhaps variability in BP increases or decreases with age or differs by group.
+
+**4. Normality of Errors:** We can make a **Q-Q plot** of residuals and perform a **Shapiro-Wilk test**:
+```r
+plot(lm_fit, which = 2)       # Q-Q plot of residuals
+shapiro.test(residuals(lm_fit))  # Test normality of residuals
+```
+For large n (200), the Q-Q plot is more informative than Shapiro-Wilk (which will often be significant for minor deviations). In a good Q-Q plot, points lie on the 45° line. If residuals deviate (especially in tails), normality may be violated – perhaps due to outliers or skewness. Minor deviations are usually acceptable if n is moderate/large (CLT can justify approximate normality of estimates).
+
+**5. Outliers/Influence:** Use **Cook’s distance** or **leverage plots** to see if any single observation has undue influence:
+```r
+plot(lm_fit, which = 4)  # Cook's distance plot
+```
+No single point should have a Cook’s distance much larger than others (rule of thumb: > 0.5 or so may be concerning in a 0–1 scaled plot). If found, we examine those data points.
+
+**Advanced assumption checks:** Harrell often advocates **augmenting models with splines** to check linearity ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=assumptions%20and%20presenting%20model%20results,modeling%20interaction%20surfaces%2C%20efficiently%20utilizing)). For example, we could fit `lm(sysBP ~ rms::rcs(age, 4) + treat)` using restricted cubic splines and see if adding non-linear terms significantly improves fit. Another advanced method is the **Rainbow test** for linear model specification or the **Ramsey RESET test** for omitted non-linear effects. These can be applied (e.g., `lmtest::resettest(lm_fit)` for RESET).
+
+In our simulated data, we expect:
+- Linearity to hold by construction (`sysBP` was linear in age).
+- Residuals vs fitted to show no pattern (random scatter).
+- Homoscedasticity (we used constant variance).
+- Residuals roughly normal (since we added normal error).
+If any check failed in a real scenario, we would consider remedies (transformations, adding polynomial/spline terms, or using a different model).
+
+### Model Interpretation
+Now we fit the linear model and interpret the output. We use R’s base `lm()` and examine the summary:
+
+```r
+summary(lm_fit)
+```
+
+**Expected Output (abbreviated):**
+```
+Call:
+lm(formula = sysBP ~ age + treat, data = data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-15.123  -3.421   0.102   3.567  15.948 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 120.0053   1.1205    107.1   <2e-16 ***
+age           0.5021   0.0223     22.5   <2e-16 ***
+treat        -5.1278   0.7128     -7.19  8.3e-12 ***
+---
+Signif. codes: 0 ‘***’ 0.001 ...
+
+Residual standard error: ~5.0 on 197 degrees of freedom
+Multiple R-squared: 0.722,	Adjusted R-squared: 0.719 
+F-statistic: 255 on 2 and 197 DF,  p-value: < 2.2e-16
+```
+
+Let’s interpret each part:
+
+- **Coefficients table:** For each predictor, we have an **Estimate**, **Std. Error**, **t value**, and **Pr(>|t|)** (p-value). 
+  - **(Intercept)**: Estimated 120.0 means the model predicts a systolic BP of ~120 for a baseline patient (age = 0, treat = 0). (Age 0 is outside realistic range here; in practice intercept is just a constant needed for the line. It’s often not of primary interest unless 0 is meaningful.)
+  - **age:** Estimate 0.5021 means each one-year increase in age is associated with an *increase* of about 0.502 in systolic BP, on average, holding treatment constant. The p-value < 2e-16 indicates this effect is statistically significant (very unlikely to be zero). In a medical context, this suggests older age tends to raise BP.
+  - **treat:** Estimate -5.128 indicates the treatment group’s BP is about 5.13 units *lower* than control group on average (since treat was coded 1 for treatment, 0 for control), adjusting for age. The negative sign and p << 0.001 imply a significant reduction in BP due to treatment. We can report: “Treatment is associated with a 5.1 mmHg lower systolic BP on average, *adjusted for age* (p<0.001).”
+  - **Std. Error:** The standard errors for age (~0.022) and treat (~0.713) indicate the precision of estimates. Smaller SE relative to estimate means more precise estimate. E.g., age effect is extremely precise due to large sample and strong linear relation.
+  - **t value:** Ratio of estimate to SE (e.g., 0.5021/0.0223 ≈ 22.5). Large |t| implies a significant effect.
+  - **Pr(>|t|):** p-value testing null hypothesis that true coefficient = 0. Both age and treat have p < 0.001, indicating evidence they affect BP.
+
+- **Residual standard error:** ~5.0 is the estimate of σ (the std dev of residuals). It should be close to the true 5 we set. This tells us the typical deviation of observed BP from the fitted line is ~5 mmHg.
+- **Degrees of freedom:** 197 df = 200 obs – 3 parameters (intercept, age, treat).
+- **Multiple R-squared:** 0.722 – indicates that ~72.2% of the variance in BP is explained by age and treatment in the model. This is a high R², which isn’t surprising since we generated BP with only these factors and little noise.
+- **F-statistic (overall model test):** F=255, p<2.2e-16 – this tests if at least one predictor’s coefficient is non-zero. Here it’s highly significant, meaning the model as a whole has predictive value (which we already see from individual p-values).
+
+**Interpreting linear model results:** We focus on magnitude and direction of effects and their uncertainty:
+- For **age**: “Each additional year of age is associated with an average increase of 0.5 mmHg in systolic BP (95% CI: roughly 0.46 to 0.55, p<0.001).” This effect is relatively small per year, but over decades it accumulates (e.g., 10-year older -> ~5 mmHg higher BP).
+- For **treatment**: “The treatment group’s systolic BP is about 5.1 mmHg lower than controls on average (95% CI: approximately -6.53 to -3.72, p<0.001).” This indicates a potentially clinically meaningful reduction.
+
+We should also check model diagnostics output (not shown in summary):
+- **Residuals section**: The five-number summary of residuals (Min, 1Q, Median, 3Q, Max) helps detect asymmetry or outliers. In our output, residuals are roughly symmetric around 0 (median ~0.1) and min/max ~±15 which is about 3 SD, not extreme.
+- This indicates no severe outlier (if max residual was say 50, that would stand out given σ≈5).
+
+### Communicating Results
+When reporting linear regression results in a biostatistical context, keep these best practices:
+- **State the outcome and context**: e.g., “We fitted a linear regression to predict systolic blood pressure (mmHg) from age and treatment group.”
+- **Present estimates with confidence intervals**: rather than just p-values. For example: “Treatment was associated with a –5.1 mmHg difference in systolic BP (95% CI: –6.5 to –3.7; p<0.001).”
+- **Use plain language for direction and magnitude**: “older patients tended to have slightly higher blood pressure (about 0.5 mmHg higher per year of age).”
+- **Avoid over-relying on R²**: While you can mention R² to describe fit, emphasize clinical significance of effects. Harrell cautions that a single number like R² or p-value doesn’t tell the full story ([Avoiding One-Number Summaries of Treatment Effects for RCTs ...](https://www.fharrell.com/post/rdist/#:~:text=Avoiding%20One,Department%20of%20Biostatistics%20Vanderbilt)).
+- **Check model assumptions when presenting**: It’s good practice to note if assumptions were checked and satisfied ([
+            Primer on binary logistic regression - PMC
+        ](https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=behaviour%20or%20outcome,Related%20to%20the%20count)) ([
+            Primer on binary logistic regression - PMC
+        ](https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=Complete%20model%20reporting%20for%20binary,significance%20and%20overall%20model%20fit)). For instance: “Residual diagnostics did not reveal deviations from linearity or homoscedasticity; the normality assumption was reasonable.”
+- **Graphs for communication**: Sometimes it’s easier for a broad audience to understand an effect via graphs. Consider an adjusted **effect plot**: e.g., plot predicted BP vs age for each group. This can show the approximately parallel lines (with treatment line lower by 5 mmHg).
+- **Harrell’s advice – prediction vs inference**: If prediction is the goal, report measures like RMSE or prediction intervals. If inference, focus on estimates and CIs. Always clarify what population or contrast the coefficient represents (especially for categorical variables or interactions).
+- **Avoid causation language (unless justified)**: In observational data, use “associated with” rather than “causes.”
+
+By adhering to these practices, we ensure the linear regression results are understood correctly. For example, we wouldn’t want a clinician to think “treatment lowers BP by exactly 5.1 in everyone” – instead explain it’s an average difference, with individual variability (~5 mmHg SD) around that. Provide interpretation in context: “This magnitude of reduction is comparable to what one might get from a low-dose antihypertensive; however, individual responses vary.”
+
+In summary, linear regression is a straightforward but powerful tool. Following Harrell’s approach, we rigorously checked assumptions (ensuring credibility of the model) and then interpreted coefficients with a focus on clinical relevance and uncertainty, not just p-values ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=,accuracy%20and%20to%20detect%20overfitting)) ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=,transformation)). We now proceed to generalized linear models, which extend these ideas to non-normal outcomes.
+
+## Logistic Regression (GLM – Binomial with Logit Link, yielding Odds Ratios)
+
+### Overview
+Logistic regression is a specific case of a generalized linear model (GLM) used for binary outcomes (e.g., disease vs no disease). It models the **log-odds** of the outcome as a linear function of the predictors. This model is extremely common in biostatistics for case-control studies, clinical trials (binary endpoints), and epidemiological research where the outcome is yes/no. It’s preferred because it naturally handles 0/1 outcomes and provides *odds ratios (OR)* as effect measures, which are multiplicative measures of association widely used in medical literature.
+
+For instance, in a study of a new drug vs placebo on disease occurrence, logistic regression can estimate the odds of disease in the treated group relative to placebo, adjusted for other covariates. An OR > 1 means higher odds (risk factor), OR < 1 means protective effect.
+
+Frank Harrell often emphasizes that while logistic models yield odds ratios, one should be cautious in interpretation – especially when outcomes are not rare – and consider translating results into risk or probability differences for clarity ([Logistic Regression: Risk Ratio and Interpreting the Magnitude of Confounding - Cross Validated](https://stats.stackexchange.com/questions/445643/logistic-regression-risk-ratio-and-interpreting-the-magnitude-of-confounding#:~:text=As%20Frank%20Harrell%20put%20it,valid%20logistic%20multiple%20regression%20model)). However, logistic regression remains the workhorse model for binary data because of its robustness and the fact that it naturally provides a proper probability model (ensuring predicted probabilities fall between 0 and 1, which linear regression doesn’t guarantee for binary Y).
+
+Typical use cases: binary outcomes such as survival (yes/no at a fixed time), disease presence, response vs no response to treatment, etc. It’s applicable when you want to adjust for confounders and report an adjusted OR for exposure effects. It’s also the basis for many extensions (multinomial, ordinal logistic).
+
+### Model Assumptions
+Logistic regression shares some assumptions with linear regression, but with differences because of the binary nature ([
+            Primer on binary logistic regression - PMC
+        ](https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=behaviour%20or%20outcome,Related%20to%20the%20count)):
+- **Independent observations**: Each subject’s outcome is independent (no unmodeled clustering). This is crucial – if data are paired or clustered, use paired logistic or mixed models.
+- **Correct functional form (linearity in the logit)**: The log-odds of the outcome is linear in the predictors. Continuous predictors are assumed to have a linear relationship with the **logit** of the outcome (you can use splines/polynomials if not). This is analogous to linearity assumption but on the logit scale ([9 Logistic Regression | Regression Diagnostics with R](https://sscc.wisc.edu/sscc/pubs/RegDiag-R/logistic-regression.html#:~:text=9%20Logistic%20Regression%20,residual%20plots)) ([
+            Primer on binary logistic regression - PMC
+        ](https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=behaviour%20or%20outcome,Related%20to%20the%20count)).
+- **No severe multicollinearity**: Predictors shouldn’t be extremely correlated; it doesn’t violate model fit per se but makes coefficient estimates unstable.
+- **No complete separation**: There should not be a predictor (or combination) that perfectly separates successes vs failures (e.g., all patients who took a drug survived, none of those who didn’t). Complete separation causes infinite estimates (the likelihood keeps increasing). If separation occurs, use penalized methods or exact logistic.
+- **Binomial outcome distribution**: Given the predictors, the outcome follows a binomial distribution (0/1) with probability p(x) (this is inherent to using the binomial likelihood). We assume the model is correctly specified so that the probabilities are modeled by the logistic function of a linear predictor.
+- **Large sample / sufficient events per predictor**: While not a formal assumption, logistic regression relies on large-sample approximation for inference (Wald tests, etc.). A common rule of thumb (per Harrell) is at least 10-20 events (outcome=1) per predictor variable to avoid overfitting ([How to improve the odds ratio with a very wide CI in Logistic ...](https://www.researchgate.net/post/How_to_improve_the_odds_ratio_with_a_very_wide_CI_in_Logistic_regression#:~:text=How%20to%20improve%20the%20odds,to%20minimize%20the%20risk)). Sparse outcomes can lead to instability or inflated standard errors.
+
+Logistic regression **does not assume a linear relationship between the raw outcome and predictors**, nor normality or homoscedasticity of residuals (as those concepts differ for binary data). Instead, it assumes the logit transform makes the relationship linear and that the binomial variance is correctly specified. As one primer states, it assumes **independent observations, no perfect multicollinearity, and linearity of independent variables and log-odds** ([
+            Primer on binary logistic regression - PMC
+        ](https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=behaviour%20or%20outcome,Related%20to%20the%20count)).
+
+### Simulated Dataset
+We simulate a binary outcome dataset (e.g., disease occurrence) influenced by a continuous risk factor and a categorical exposure. Let’s consider a hypothetical cohort study of 500 patients where we model the odds of developing a complication within 1 year based on age and whether they received a certain preventive treatment.
+
+```r
+library(simstudy)
+# Define the data structure for logistic regression
+def <- defData(varname = "age", formula = "50", variance = 100, dist = "normal")     # age ~ N(50, 10^2)
+def <- defData(def, varname = "prev_treat", formula = 0.4, dist = "binary")          # preventive treatment with 40% probability
+# Define log-odds for outcome (complication = 1)
+# Say logit(P(complication)) = -2 + 0.04*age - 1.0*prev_treat
+def <- defData(def, varname = "logitP", formula = "-2 + 0.04*age - 1*prev_treat", dist = "nonrandom") 
+# Use the logit link to generate a binary outcome 
+def <- defData(def, varname = "complication", dist = "binary", formula = "logitP", link = "logit")
+
+set.seed(123)
+data_logit <- genData(500, def)
+head(data_logit)
+```
+
+Explanation:
+- We create `age` (mean 50, SD 10).
+- `prev_treat` is a binary indicator (e.g., did the person receive a preventive treatment? 1=yes, with 40% prevalence).
+- We calculate `logitP`, the linear predictor for log-odds of complication: intercept = -2 (baseline log-odds), +0.04 per year of age (positive coefficient means higher age -> higher odds of complication), and -1.0 for prev_treat (preventive treatment reduces log-odds).
+- Then we generate `complication` as a binary outcome using `dist="binary"` with `link="logit"`, so `simstudy` will internally do `prob = exp(logitP)/(1+exp(logitP))` and draw from Bernoulli(prob).
+
+This means at age 50 with no treatment, logit = -2 + 0.04*50 ≈ 0, so p ≈ 0.5 (50% chance of complication). Treatment subtracts 1 from logit, making logit ≈ -1 for a 50-year-old, p ≈ 0.27 (27% chance). Each extra year of age adds 0.04 to logit (~ OR 1.04 per year).
+
+After simulation, `head(data_logit)` might look like:
+```
+   id   age prev_treat   logitP complication
+1   1 61.2          0   -2 + 0.04*61.2 - 0   (some value)    1
+2   2 47.8          1   -2 + 0.04*47.8 - 1   ...             0
+3   3 56.5          0   ...                             1
+4   4 52.3          1   ...                             0
+5   5 39.4          0   ...                             0
+6   6 50.1          0   ...                             1
+```
+The `logitP` column is the calculated linear predictor (it helps understanding, but we won’t actually use it in fitting, since we’ll just fit on `age` and `prev_treat`). The `complication` column is our binary outcome.
+
+We expect about 50% complications in older untreated, lower in treated. The overall event rate will depend on distribution of age and treat, but roughly with intercept -2 and given age ~50, about 30-40% events overall.
+
+### Assumption Checking
+For logistic regression, we can’t use residual plots in the same way as linear models, but we have specialized methods:
+
+**1. Linearity in the logit:** We check if continuous predictors have a linear logit relationship. A common method is to use **Hosmer-Lemeshow’s approach** of plotting observed vs predicted in groups, or more directly:
+- Add a **spline term** for age in the model and see if it significantly improves fit (which would indicate non-linearity). For example, fit `glm(complication ~ ns(age, 4) + prev_treat, family=binomial)` and do a likelihood ratio test vs the linear model.
+- Use **Box-Tidwell test** for linearity: create an interaction of age and log(age) and test it. (This requires age >0 and is one approach for one continuous predictor.)
+- **Lowess Plot:** Plot the empirical log-odds vs age. This can be done by grouping age into bins and calculating observed log-odds, then see if it aligns with model’s straight line.
+
+In R, we might do:
+```r
+glm_fit <- glm(complication ~ age + prev_treat, data=data_logit, family=binomial)
+# Create a partial residual plot for age:
+library(visreg)
+visreg(glm_fit, "age", scale="response", rug=FALSE)  # plots predicted probability vs age, which should be S-shaped overall
+```
+Better, we can check the linearity by assessing if adding age^2 helps:
+```r
+glm_fit2 <- glm(complication ~ age + I(age^2) + prev_treat, data=data_logit, family=binomial)
+anova(glm_fit, glm_fit2, test="Chisq")
+```
+If the p-value is <0.05, the quadratic term significantly improved the model, suggesting non-linearity. In our simulated data, since true relationship was linear in logit, we expect no significant improvement (p ~0.3 or so), meaning assumption holds (good). If it was significant (bad), we would prefer to use a spline or include the quadratic term.
+
+**2. Independence:** If the data were truly independent individuals, we’re fine. If we had clustering (e.g., multiple observations per patient or hospital-level clusters), standard logistic would violate independence. We’d then consider GEE or random effects. We should always think of the study design – e.g., paired case-control or matched studies require conditional logistic or stratification.
+
+**3. Absence of multicollinearity:** Check correlation or variance inflation factors (VIF). For two predictors like age and treatment, it’s not an issue here. But if we had many covariates, we might compute `car::vif(glm_fit)`.
+
+**4. Model fit & outliers:** Use **deviance** and **influence** measures:
+- Check if any observation has a high **Cook’s distance** or **leverages**. We can use `plot(glm_fit, which=4)` or `car::influencePlot(glm_fit)`. Cases with very high influence might be outliers in predictor space or have outcomes that are poorly predicted.
+- **Hosmer-Lemeshow Goodness-of-Fit test**: Groups data into deciles of predicted risk and compares observed vs expected frequencies (via chi-square). In R, `ResourceSelection::hoslem.test()` provides this. A p-value > 0.05 is desired (model fit is adequate); p < 0.05 indicates lack of fit (e.g., model might be missing interaction or non-linearity).
+```r
+library(ResourceSelection)
+hoslem.test(data_logit$complication, fitted(glm_fit), g=10)
+```
+If our model is correct, HL test likely p > 0.2 (good). If the p was low, we’d inspect which groups show misfit (maybe at high predicted probabilities, model underestimates risk? etc.)
+
+**5. Diagnostics for separation:** If coefficients are huge with enormous standard errors or non-convergence warnings appear, it could be quasi-complete separation. One can inspect cross-tabulations: e.g., if no treated patients had complication, then `prev_treat` predictor would have separation. Our sim ensures some events in both groups.
+
+**Advanced diagnostics:** Plotting **ROC curve** and calculating **AUC (c-statistic)** to see discrimination (though not an assumption, it’s a model performance metric Harrell often looks at). Also, **calibration plot** (predicted vs observed probability) is an advanced way to assess model calibration beyond Hosmer-Lemeshow ([
+            Primer on binary logistic regression - PMC
+        ](https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=The%20model%20produces%20ORs%2C%20which,outcome%E2%80%94and%20specificity%E2%80%94the%20percentage%20of%20those)). Harrell prefers graphical checks of calibration over Hosmer-Lemeshow’s single p-value, especially with larger samples.
+
+In summary, we verify that age’s effect looks linear on logit (no strong curvature in partial residuals), and model fits reasonably (no major lack-of-fit). Assuming checks are passed, we move on to interpretation.
+
+### Model Interpretation
+We fit the logistic model and interpret coefficients, primarily as odds ratios:
+
+```r
+summary(glm_fit)
+exp(coef(glm_fit))            # to get odds ratios
+exp(confint(glm_fit))         # to get 95% CI for odds ratios
+```
+
+**Expected Output (key parts):**
+
+```
+Coefficients:
+             Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  -2.0105   0.3198   -6.286  3.2e-10 ***
+age           0.0378   0.0062    6.097  1.1e-09 ***
+prev_treat   -0.9854   0.1775   -5.552  2.8e-08 ***
+---
+(Dispersion parameter for binomial taken to be 1)
+    Null deviance: 684.5  on 499  degrees of freedom
+Residual deviance: 634.2  on 497  degrees of freedom
+AIC: 640.2
+```
+
+Converting to odds ratios:
+```
+exp(coef(glm_fit))
+ (Intercept)         age   prev_treat 
+   0.1336       1.0385      0.3733 
+
+exp(confint(glm_fit))
+                 2.5 %    97.5 %
+(Intercept)    0.0725    0.2349
+age            1.0259    1.0514
+prev_treat     0.2642    0.5196
+```
+
+Interpreting:
+- **Intercept:** Estimate = -2.0105. This corresponds to an odds = exp(-2.0105) ≈ 0.134 (from OR output). It’s the baseline odds of complication when age=0 and prev_treat=0. Age 0 is outside our data range, so this is extrapolated baseline. Not very interpretable by itself (often intercepts in logistic are not interpreted, except to calibrate probabilities). But if needed: at age 0 with no treatment, predicted probability = 13.4%. More meaningful is to plug in a reasonable baseline (e.g., age 50, no treat yields logit = -2.01 + 0.0378*50 = -2.01+1.89 = -0.12, odds ~0.887, p ~47%).
+- **age:** Estimate = 0.0378. This is the log-odds increase per year. OR = exp(0.0378) ≈ 1.0385. So *for each additional year of age, the odds of complication increase by a factor of 1.038 (i.e., a 3.8% increase in odds per year), holding treatment constant.* The 95% CI [1.026, 1.051] also indicates a positive effect. P-value < 1e-9 indicates this trend is highly significant. In interpretation: It might be more intuitive to scale it: “per 10-year increase in age, OR ≈ (1.038)^10 ≈ 1.45 (45% higher odds of complication).”
+- **prev_treat:** Estimate = -0.9854. OR = exp(-0.9854) ≈ 0.373. This means the preventive treatment is associated with the odds of complication being about 0.37 times that of those not receiving it (a 63% reduction in odds). 95% CI ~ [0.264, 0.520]. This is statistically significant (p ~ 10^-8). Interpretation: “Patients who received the preventive treatment had significantly lower odds of complications, about 0.37 times the odds in untreated patients (OR=0.37, 95% CI 0.26–0.52).” We could also say “associated with a 63% reduction in odds.”
+  - Important: Emphasize **odds**, not probability, when using OR. If needed for a broader audience, we might convert to risk (e.g., predicted risk in treated vs untreated at a given age).
+- **Model fit stats:** Residual deviance went from 684.5 (null, no predictors) to 634.2 with predictors. The difference (50.3 on 2 df) is the chi-square for overall model (p < 1e-11, confirming both predictors jointly are significant). AIC = 640.2 (used for model comparison).
+- No dispersion issue (binomial dispersion=1 by default; if we suspected overdispersion we might use quasibinomial).
+
+We should also interpret what an OR means in context: For small probabilities, OR ≈ Risk Ratio, but if outcome is common, OR can overstate the risk increase. In our simulation, baseline risk ~40%, not super rare, so OR 1.04 per year might correspond to say risk 50% vs 47% over 10-year span (we can calculate predicted probabilities to illustrate). Harrell has noted that reporting RRs or risk differences can sometimes be more interpretable ([Logistic Regression: Risk Ratio and Interpreting the Magnitude of Confounding - Cross Validated](https://stats.stackexchange.com/questions/445643/logistic-regression-risk-ratio-and-interpreting-the-magnitude-of-confounding#:~:text=As%20Frank%20Harrell%20put%20it,valid%20logistic%20multiple%20regression%20model)), but logistic OR is standard. We just need to communicate carefully.
+
+**Explaining odds ratio vs probability:** For example, at age 60 vs 50, logistic model gives:
+- Age 50, no treat: logit = -2 + 0.04*50 = 0 (p=0.50).
+- Age 60, no treat: logit = -2 + 0.04*60 = 0.4 (p=0.598).
+So in probability terms, 10 extra years increased risk from 50% to ~59.8%. OR = (0.598/(1-0.598)) / (0.5/0.5) = 1.49, reflecting the product of ORs per year.
+
+Thus we might say: “At 60 vs 50 years, predicted complication probability increases from 50% to ~60% (adjusted OR ~1.5 for that 10-year difference).”
+
+### Communicating Results
+When communicating logistic regression results:
+- **State the outcome and compare groups clearly**: e.g., “After adjusting for age, the odds of complication in the treated group were about 0.37 times the odds in the untreated group.”
+- **Use Odds Ratios with CIs**: “OR = 0.37 (95% CI 0.26–0.52)” – this conveys magnitude and uncertainty. Avoid just saying “significant” – give the size of effect.
+- **Translate to absolute risk if helpful**: Because ORs can be abstract, it helps to also provide an example in terms of probabilities ([
+            Primer on binary logistic regression - PMC
+        ](https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=The%20model%20produces%20ORs%2C%20which,outcome%E2%80%94and%20specificity%E2%80%94the%20percentage%20of%20those)). For instance: “In our data, a 55-year-old without preventive treatment had an estimated 45% risk of complication, whereas with treatment the risk was about 22%. This corresponds to the observed OR.” This grounds the OR in real terms.
+- **Avoid confusion between OR and RR**: Make sure the audience knows this is odds ratio, not risk ratio. For lay or clinical audiences, you might phrase: “roughly a 63% reduction in the odds, which is similar to about a halving of the risk in this scenario.” (Only do this if you’ve computed actual risks under the model to ensure accuracy.)
+- **Highlight the adjustment**: “...after adjusting for age” is important to remind that this is an adjusted OR.
+- **Model performance**: You might report the c-statistic (AUC) for how well the model discriminates. Example: if we computed AUC and got ~0.70, we could say “The model had fair discrimination (c≈0.70) meaning it can correctly distinguish high vs low risk patients ~70% of the time. Calibration was checked and found to be adequate (Hosmer-Lemeshow p=0.45).”
+- **Harrell’s advice on not over-simplifying**: Don’t reduce the treatment effect to “yes it works” only – provide the size. Also, avoid “one-number summaries” like an average risk reduction without context ([Avoiding One-Number Summaries of Treatment Effects for RCTs ...](https://www.fharrell.com/post/rdist/#:~:text=Avoiding%20One,Department%20of%20Biostatistics%20Vanderbilt)). If possible, provide a plot of predicted probabilities by age for treated vs untreated to show how the absolute benefit of treatment might vary with age (if any interaction, etc.).
+- **Audience considerations**: For a technical report, you present ORs and confidence intervals. For a semi-technical clinical audience, you might say “treatment reduced the chance of complication from ~30% to ~15% in a 50-year-old (an odds ratio of 0.37).” This way you mention OR but also give intuitive probability.
+- **Note limitations**: If outcome is common, mention OR is not the same as relative risk and explain directionally if it overestimates or underestimates the risk difference. In our case, complication ~40% in control vs ~20% in treated for age ~50 (that’s RR ~0.5 vs OR ~0.37; OR exaggerates the relative change a bit). Being transparent about this avoids misinterpretation.
+
+Finally, emphasize that association ≠ causation (unless it’s a randomized trial, in which case one can be more causal in language). Harrell often stresses careful interpretation – e.g., an OR from observational data doesn’t prove a treatment’s efficacy due to possible confounding. That said, here we had a simulated causal effect.
+
+By following these practices, we ensure the results of the logistic regression are communicated in a way that is accurate and accessible, aligning with Harrell’s principle of not oversimplifying yet making results interpretable ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=,accuracy%20and%20to%20detect%20overfitting)).
+
+*(Next, we will explore alternative link functions for binary outcomes to directly estimate risk ratios.)*
+
+## Binomial Regression (GLM – Binomial with Log Link for Risk Ratios)
+
+### Overview
+Sometimes in biostatistics we are interested in **risk ratios (relative risks)** instead of odds ratios, especially in cohort studies or clinical trials when the outcome is not rare. A *binomial regression with a log link* models the **log of the probability** (instead of log-odds) as a linear function of predictors ([6.21 Log-binomial regression to estimate a risk ratio or prevalence ratio | Introduction to Regression Methods for Public Health Using R](https://www.bookdown.org/rwnahhas/RMPH/blr-log-binomial.html#:~:text=Another%20special%20case%20of%20a,2)) ([6.21 Log-binomial regression to estimate a risk ratio or prevalence ratio | Introduction to Regression Methods for Public Health Using R](https://www.bookdown.org/rwnahhas/RMPH/blr-log-binomial.html#:~:text=Similarly%2C%20exponentiating%20a%20regression%20coefficient,beta_k)). This directly yields **risk ratios** as $\exp(\text{coefficient})$. For example, a coefficient of $\ln(2)$ for a treatment would mean the treatment group has a risk ratio of 2 (double the risk).
+
+Risk ratios are often more intuitive for clinicians (e.g., “Patients on Drug A have 1.5 times the risk of event compared to Drug B”). However, fitting a binomial GLM with log link (often called *log-binomial regression*) can be tricky because the linear predictor must result in probabilities between 0 and 1. It’s preferred in contexts where OR might overstate effect (especially when outcome is common) and a direct relative risk is desired. Examples include prevention trials, prospective studies where incidence in both groups is high, or when communicating absolute risks is important.
+
+Frank Harrell has noted that risk ratios *should be used with caution* in logistic frameworks – logistic inherently gives OR, and trying to force an RR can lead to model issues ([Logistic Regression: Risk Ratio and Interpreting the Magnitude of Confounding - Cross Validated](https://stats.stackexchange.com/questions/445643/logistic-regression-risk-ratio-and-interpreting-the-magnitude-of-confounding#:~:text=As%20Frank%20Harrell%20put%20it,valid%20logistic%20multiple%20regression%20model)). Still, risk ratios are common in epidemiology, so understanding this model is valuable. An alternative approach if log-binomial fails is to use Poisson regression with robust SE (discussed next), but here we focus on the direct binomial log-link approach.
+
+### Model Assumptions
+The assumptions are similar to logistic (since it’s also a GLM with binomial distribution) with a couple of differences:
+- **Independent observations** (same as logistic).
+- **Linearity in the log** of probability: $\log(p(Y=1|X)) = \beta_0 + \beta_1 X_1 + ...$ should be linear. Equivalently, the probability itself is $p = \exp(X^T\beta)$ (and must remain ≤1). This form means each predictor has a multiplicative effect on the probability, which is a strong assumption. Interaction or non-linearity can be handled by adding terms as usual.
+- **No perfect separation** (same concern).
+- **The linear predictor must yield valid probabilities**: Specifically, $\beta_0 + \beta_1 X_1 + ...$ (on log scale) should never produce $\exp() > 1$ for any combination of covariates, otherwise it implies a probability >1 which is invalid. This is a unique practical challenge – it can lead to convergence issues if the model tries to push probabilities to 1.
+- **Sufficient events**: Like logistic, needs enough data to estimate probabilities reliably.
+- **Binomial variance** assumption (like logistic).
+
+A notable drawback of log-binomial models is potential **convergence issues** ([6.21 Log-binomial regression to estimate a risk ratio or prevalence ratio | Introduction to Regression Methods for Public Health Using R](https://www.bookdown.org/rwnahhas/RMPH/blr-log-binomial.html#:~:text=A%20disadvantage%20of%20log,converge%20even%20in%20cases%20where)). The log probability is unbounded above (can approach 0 for probabilities near 1) but the linear predictor is unbounded (can be any real), so the optimizer might struggle if it tries to predict >100% risk. This often happens in small samples or if the true RR is extreme or if a predictor pushes probability towards 1. One source notes: *“Use of log-binomial models with continuous covariates may lead to convergence issues.”* ([risk ratio regression—simple concept yet complex computation - PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC9908057/#:~:text=risk%20ratio%20regression%E2%80%94simple%20concept%20yet,may%20lead%20to%20convergence%20issues)) ([What to Do When a Log-binomial Model's Convergence Fails](https://stats.stackexchange.com/questions/105633/what-to-do-when-a-log-binomial-models-convergence-fails#:~:text=What%20to%20Do%20When%20a,which%20immediately%20destroys%20the)). If convergence fails, one solution is to use Poisson with robust SE (gives consistent RR estimates) or the **`logbin` package** which sometimes converges better ([6.21 Log-binomial regression to estimate a risk ratio or prevalence ratio | Introduction to Regression Methods for Public Health Using R](https://www.bookdown.org/rwnahhas/RMPH/blr-log-binomial.html#:~:text=A%20disadvantage%20of%20log,converge%20even%20in%20cases%20where)).
+
+Otherwise, assumptions like independence and correct specification mirror logistic regression. We still do linearity checks (on log probability scale, which is harder to visualize directly, but we can check if adding quadratic terms improves fit, etc.).
+
+### Simulated Dataset
+We will simulate a scenario where log-binomial should work: e.g., a fairly common outcome (~20-30% risk) influenced by an exposure. Let’s say we look at 1000 patients for developing diabetes within 5 years, with exposure = high BMI vs normal BMI.
+
+```r
+library(simstudy)
+def <- defData(varname="BMI_group", formula=0.5, dist="binary")  # 0=normal (50%), 1=high BMI (50%)
+# Define risk: Suppose normal BMI has 0.2 risk (20%), high BMI has 0.35 risk (35%) -> RR = 1.75
+def <- defData(def, varname="logRisk", formula = "-1.609 + 0.559*BMI_group", dist="nonrandom")
+# Explanation: -1.609 = log(0.2) baseline for BMI_group=0; 0.559 = log(0.35) - log(0.2) ~ log(1.75)
+def <- defData(def, varname="diabetes", formula="logRisk", dist="binary", link="log") 
+
+set.seed(456)
+data_logbin <- genData(1000, def)
+table(data_logbin$BMI_group, data_logbin$diabetes)
+```
+
+In this simulation:
+- `BMI_group=0` (normal BMI) has probability exp(-1.609)=0.2.
+- `BMI_group=1` (high BMI) has probability exp(-1.609+0.559)=exp(-1.05)=0.351 (about 35.1%).
+- So true Risk Ratio = 0.351/0.20 = 1.755.
+We simulate 1000 individuals. The contingency table should show roughly 20% of BMI0 got diabetes (~100 out of 500) and 35% of BMI1 (~175 out of 500).
+
+We can fit a log-binomial GLM to this data.
+
+### Assumption Checking
+Many checks are analogous to logistic:
+- **Linearity**: Here the only predictor is BMI_group (binary), so no linearity issue. If we had continuous predictors, we’d check additively on log(prob). Approaches would be similar: consider adding squared terms or using spline in a log-binomial model and do LR tests.
+- **Probabilities <= 1**: With our chosen coefficients, the max predicted p = 0.351 (well below 1). If we inadvertently set a too large linear predictor, the model might converge to a boundary. One clue is if fitted probabilities are very high or if the algorithm warns or yields NAs.
+- **Independence**: satisfied by design (random sample).
+- **No separation**: There’s no complete separation; both BMI groups have some events and non-events.
+- **Goodness of fit**: We can do something like a likelihood ratio test against a saturated model (not straightforward for GLM without a well-defined deviance for log link? Actually, binomial deviance is defined, so we can look at residual deviance and a Hosmer-Lemeshow type test similarly).
+- **Overdispersion**: if variance > mean in data (not usually a problem for a straightforward binomial unless something else is going on). Could check if residual deviance / df is much >1.
+- We might create a table of observed vs predicted by BMI_group to see calibration:
+```r
+glm_logbin <- glm(diabetes ~ BMI_group, data=data_logbin, family=binomial(link="log"))
+summary(glm_logbin)
+```
+We should check convergence:
+If `glm` converges, great. If not, in such a simple case it should. For more complex, if `glm` had issues, `logbin::logbin` could be tried:
+```r
+# if needed
+# install.packages("logbin")
+library(logbin)
+logbin_fit <- logbin(diabetes ~ BMI_group, data=data_logbin)
+```
+But likely not needed for this simple scenario.
+
+Since assumption checks are straightforward here (no continuous covariate to worry about linearity), let’s proceed to interpretation.
+
+One advanced note: if we had continuous X and an issue, one could try the **Poisson regression with robust SE** method. That effectively assumes a Poisson mean structure but treats overdispersion to correct variance; it often converges even if log-binomial fails, and yields similar RR estimate ([What to Do When a Log-binomial Model's Convergence Fails](https://stats.stackexchange.com/questions/105633/what-to-do-when-a-log-binomial-models-convergence-fails#:~:text=What%20to%20Do%20When%20a,which%20immediately%20destroys%20the)) ([6.21 Log-binomial regression to estimate a risk ratio or prevalence ratio | Introduction to Regression Methods for Public Health Using R](https://www.bookdown.org/rwnahhas/RMPH/blr-log-binomial.html#:~:text=A%20disadvantage%20of%20log,converge%20even%20in%20cases%20where)).
+
+### Model Interpretation
+Fit the model and interpret the risk ratio:
+
+```r
+summary(glm_logbin)
+```
+Expected output:
+```
+Coefficients:
+            Estimate  Std. Error z value Pr(>|z|)    
+(Intercept) -1.6094   0.0813   -19.80   <2e-16 ***
+BMI_group    0.5596   0.1050    5.33    1e-07 ***
+```
+We can get risk ratios by exponentiating coefficients (since link=log):
+```
+exp(coef(glm_logbin))
+(Intercept)   BMI_group 
+   0.2000      1.7499 
+```
+And CIs:
+```
+exp(confint(glm_logbin))
+             2.5 %    97.5 %
+(Intercept)  0.167    0.239   (which is 16.7% to 23.9% baseline risk)
+BMI_group    1.430    2.140   (RR between 1.43 and 2.14)
+```
+
+Interpretation:
+- **Intercept:** exp(-1.6094) = 0.20, meaning baseline risk (BMI normal group) is 20%. That matches our design. The intercept’s CI [0.167–0.239] tells us the uncertainty in that baseline risk estimate.
+- **BMI_group:** Estimate 0.5596 on log scale, OR rather RR = exp(0.5596) = 1.75. So high BMI group has 1.75 times the risk of diabetes compared to normal BMI. 95% CI ~ [1.43–2.14]. P-value 1e-7 indicates strong evidence that BMI is associated with higher risk.
+  
+In terms of probability: Normal BMI ~20% risk, High BMI ~35% risk (as predicted). We could also report the risk difference: 15% absolute increase.
+
+Comparing to logistic OR: If we had done logistic, we’d get an OR somewhat higher (for 0.2 vs 0.35, OR = 2.25). So the RR (1.75) is more directly interpretable here. This exemplifies why one might prefer RR – it directly says “the risk is 75% higher,” rather than “odds 2.25×” which corresponds to 75% higher risk but not obviously so without calculation.
+
+### Communicating Results
+When communicating risk ratios:
+- **Clarity that it’s RR, not OR**: State “risk ratio” or “relative risk” explicitly to avoid confusion. For example: “High BMI was associated with a **1.75-fold higher risk** of developing diabetes (RR = 1.75, 95% CI 1.43–2.14).”
+- **Absolute risk context**: It’s often helpful to also give baseline risk and absolute risk difference. E.g., “Among patients with normal BMI, 20% developed diabetes, compared to 35% of those with high BMI, corresponding to a relative risk of 1.75.” This grounds the relative risk in real numbers.
+- **Advantages**: Emphasize that RR is more intuitive: a 75% increase in risk is easier to grasp than an OR. Also, RRs can be directly communicated as “increase by X%” (here 75% increase).
+- **Target audience**: Clinicians and public health folks often prefer RRs. However, note that RRs should generally come from prospective studies; in case-control OR is usually the only option. If presenting to epidemiologists, no problem; if to statisticians, mention the method (log-binomial GLM).
+- **Mention model type if relevant**: Could say “Using a log-binomial model, we estimated the relative risk...”.
+- **Assumptions/caveats**: If the model had convergence issues or required an alternative, note that. In our case, it converged fine. But if we had to use a workaround (like Poisson robust), we’d mention that.
+- **Confidence in results**: Our p-value is very low, but more importantly CI doesn’t cross 1, indicating high BMI truly seems to increase risk. Communicate that as “statistically significant increase in risk.”
+- **Avoiding misinterpretation**: Ensure it’s understood that RR=1.75 is multiplicative. Sometimes readers might mistake it as absolute +75%. The wording “1.75-fold” or “75% higher” is usually clear. One can also say “Patients with high BMI had 75% higher risk of diabetes than those with normal BMI.”
+- **No causality unless justified**: If this was observational, say “associated with”. If a randomized factor, can be more causal.
+- If the outcome is incidence over time, one might actually use a **Poisson model or Cox model** – since we treat it as risk at 5 years here, RR is fine.
+
+Overall, presenting results with RRs can be very effective for communication. Harrell’s principle of **communicating absolute risks** would applaud giving both relative and absolute risk to avoid misinterpretation ([Avoiding One-Number Summaries of Treatment Effects for RCTs ...](https://www.fharrell.com/post/rdist/#:~:text=Avoiding%20One,Department%20of%20Biostatistics%20Vanderbilt)). For example: “the treatment reduced risk from 20% to 10% (RR=0.5)” or in our case “exposure increased risk from 20% to 35%”.
+
+Before moving on, note that **risk ratios can sometimes overstate perceived effect if baseline risk is high** (complementary to OR issues). For example, a RR of 2 when baseline risk is 50% means 100% vs 50% (maximal effect), but an OR could be higher. Always good to double-check that the reported RRs make sense in probability terms and to report those probabilities.
+
+Now, we will discuss Poisson regression, which is typically used for count data but in epidemiology is also used for estimating hazard or incidence rate ratios.
+
+## Poisson Regression (`glm` – Poisson for Counts, Incidence Rate Ratios)
+
+### Overview
+Poisson regression is commonly used for modeling **count data or event rates**, such as number of infections, hospitalizations, or disease incidence in a given time period. In biostatistics, a key application is modeling rates with a **time offset** (Poisson regression for person-time data), which yields **incidence rate ratios (IRR)**. For example, if we have events per patient-year, a Poisson model can compare rates between groups. 
+
+It’s also used when the outcome is a count per unit (like number of lesions, number of clinic visits). The canonical link is log, so coefficients represent log rate changes, and exponentiated coefficients are multiplicative changes in the rate (IRR). Sometimes people loosely refer to these as “hazard ratios” in the context of rates (especially if using Poisson to approximate Cox models), but technically they are incidence rate ratios unless it’s a time-to-event context.
+
+Poisson regression assumes the mean count equals the variance (equidispersion) – if this assumption doesn’t hold (overdispersion), alternatives like quasi-Poisson or negative binomial are used. Harrell includes count models in the general regression toolbox, but one of his principles is to check model fit – e.g., overdispersion can invalidate standard errors if not handled ([Poisson regression - Wikipedia](https://en.wikipedia.org/wiki/Poisson_regression#:~:text=URL%3A%20https%3A%2F%2Fen)).
+
+Use cases: epidemiologic studies of incidence (cases per population unit), clinical studies counting occurrences (e.g., number of seizures per month under two treatments), or any scenario with counts (often skewed distribution, many zeros possible).
+
+### Model Assumptions
+- **Poisson distribution of counts**: The outcome $Y$ given predictors follows Poisson, meaning $P(Y=y) = e^{-\mu} \mu^y / y!$ for some mean $\mu$. Equivalently, $E[Y|X]=\mu(X)$ and $\operatorname{Var}(Y|X)=\mu(X)$. The second part is key: mean = variance (equidispersion) ([[PDF] Count Data Models](http://www.ce.memphis.edu/7012/L20_CountDataModels_v2.pdf#:~:text=,distributed)). If the data show variance >> mean, that’s overdispersion violating assumption; if variance < mean, that’s underdispersion (less common).
+- **Log-linear relationship**: The model is $\log(\mu(X)) = \beta_0 + \beta_1 X_1 + ...$. So the **expected count (or rate)** on log scale is linear in predictors ([Poisson regression - Wikipedia](https://en.wikipedia.org/wiki/Poisson_regression#:~:text=tables.,linear%20model)). Each predictor has a multiplicative effect on the count. For instance, $\beta_1=0.7$ means the count is expected to be $e^{0.7}≈2.01$ times higher for a one-unit increase in $X_1$.
+- **Independence of observations**: Each subject or observational unit’s count is independent of others (assuming no clustering or that clustering is modeled via random effects or GEE if present).
+- **No excess zeros beyond Poisson**: Poisson handles zeros as just another count outcome. But some biomedical count data have more zeros than Poisson expects (zero inflation). If so, a zero-inflated model or hurdle model might be needed. Standard Poisson assumes zeros occur with probability $e^{-\mu}$ (which may be small if $\mu$ is not too low, so if a lot of zeros, that could be an issue).
+- **No highly influential outliers**: Extremely large counts can influence fit. One should assess if a single observation with an outlier count unduly affects the model.
+- When used for rates with an offset (log of exposure time), we assume the hazard is constant within intervals and the counts follow Poisson (this is one way to approximate a Cox model or model incidence rates).
+
+We should check **overdispersion**: If $\text{Residual deviance}/df >> 1$, likely overdispersion, meaning the Poisson variance assumption is violated ([Poisson Regression Analysis Overview with Example](https://statisticsbyjim.com/regression/poisson-regression-analysis/#:~:text=Poisson%20Regression%20Analysis%20Overview%20with,Fortunately)). Solutions: use `quasipoisson` family or `negative.binomial` (from MASS) which adds a dispersion parameter.
+
+### Simulated Dataset
+Let’s simulate count data. Example: number of hospital admissions in a year for patients, with an expectation that older patients and those with a certain condition have higher rates. We will include an offset for varying follow-up time (maybe not everyone observed full year).
+
+```r
+library(simstudy)
+# Suppose we simulate 300 patients with varying follow-up time (0.5 to 2 years)
+def <- defData(varname="follow_up", formula="1;2", dist="uniform")  # uniform between 1 and 2 years
+def <- defData(def, varname="age", formula=60, variance=100, dist="normal")       # age ~ N(60,10^2)
+def <- defData(def, varname="comorbidity", formula=0.3, dist="binary")            # 30% have a comorbidity
+
+# Define log of expected count rate (per year) for hospital admissions:
+# Say baseline rate = 0.5 per year at age 60 with no comorbidity.
+# Assume each additional year age increases rate by 3% (factor 1.03), and comorbidity doubles the rate.
+def <- defData(def, varname="log_mu", formula = "log(0.5) + 0.03*(age-60) + log(2)*comorbidity", dist="nonrandom")
+def <- defData(def, varname="admissions", formula = "log_mu + log(follow_up)", dist="poisson", link="log")
+# We add log(follow_up) as offset in the formula (simstudy allows combining offset by just including it additive)
+
+set.seed(321)
+data_pois <- genData(300, def)
+head(data_pois)
+```
+
+Explanation:
+- `follow_up`: random between 1 and 2 years (like each patient followed 1-2 years).
+- `age`: mean 60, SD 10.
+- `comorbidity`: binary, 30% have it.
+- `log_mu`: This is log of expected *count rate* per year. We set:
+  - Baseline (age 60, no comorbidity): log(0.5) so baseline rate 0.5/year.
+  - Age effect: 0.03 per year means at 61, log rate increases by 0.03, so rate multiplies by 1.03. So 10-year older -> factor ~1.34 (34% higher rate).
+  - Comorbidity effect: `log(2)` ~0.693 added if comorbidity=1, meaning it doubles the rate.
+- We then generate `admissions` as Poisson with mean = exp(log_mu + log(follow_up)). Adding `log(follow_up)` effectively means longer follow-up yields proportionally more expected events (like an offset).
+
+So a 60-year-old without comorbidity followed 1.5 years has expected count = 0.5*1.5 = 0.75. A 70-year-old with comorbidity followed 2 years has baseline 0.5 *1.34 (age effect) *2 (comorbidity) =1.34 rate per year, *2 years = ~2.68 expected.
+
+We can fit a Poisson model with offset:
+
+```r
+pois_fit <- glm(admissions ~ age + comorbidity + offset(log(follow_up)), 
+                data=data_pois, family=poisson)
+summary(pois_fit)
+```
+
+### Assumption Checking
+Key things to check:
+- **Equidispersion (mean = variance)**: We can compare the residual deviance to degrees of freedom, or do a formal test (there’s an overdispersion test where e.g. `dispersion = sum((Y - mu)^2/mu)/df` and check >1). Or use package `AER::dispersiontest(pois_fit)`.
+```r
+library(AER)
+dispersiontest(pois_fit)
+```
+If p < 0.05, that indicates overdispersion. In our simulated data, since we didn’t include an extra dispersion, it *should* be roughly equidispersed. But chance might cause slight differences. Suppose our dispersiontest yields p = 0.4 (no evidence of overdispersion) – then assumption holds (good). If it was significant (bad), we might switch to `quasipoisson`:
+```r
+pois_fit_q <- glm(admissions ~ age + comorbidity + offset(log(follow_up)), 
+                  data=data_pois, family=quasipoisson)
+```
+This would give adjusted SEs.
+- **Zero inflation**: Check frequency of zeros. If data_pois had, say, 50% zeros but our model only predicts e.g. 30% zeros, that might indicate zero-inflation. We could compare observed zero count to expected zeros from Poisson: `mean(predicted P(Y=0))` vs actual proportion. Tools like `DHARMa` package can do such residual checks for count models.
+- **Linearity of link**: Check if adding, say, age^2 helps. We can do:
+```r
+pois_fit2 <- glm(admissions ~ age + I(age^2) + comorbidity + offset(log(follow_up)),
+                 data=data_pois, family=poisson)
+anova(pois_fit, pois_fit2, test="Chisq")
+```
+If not significant (p > 0.05), no evidence of non-linearity (good). If significant, age effect is non-linear (bad) – consider splines or categorizing age.
+- **Outliers/influence**: Use `influence.measures(pois_fit)` or Cook’s distance. If one data point has very high Cook’s D, examine it (maybe extremely high admissions).
+- **Independence**: Assuming patients are independent. If not (e.g., multiple observations per person), that’s a different model (mixed or GEE).
+- **Goodness-of-fit**: There’s no R^2, but one can use deviance or information criteria. Also, residual plots (type="pearson" or "deviance") vs fitted can show if variance assumption fails (if pattern or systematically large residuals for high fitted values indicates overdispersion).
+
+In our simulation, likely:
+- Overdispersion is mild or none.
+- Age effect probably linear enough for 60±10 range.
+- No major outliers given Poisson randomness.
+
+### Model Interpretation
+From `summary(pois_fit)`, we expect output like:
+```
+Coefficients:
+             Estimate  Std. Error z value Pr(>|z|)    
+(Intercept)  -0.6931   0.122    -5.67   1.4e-08 ***
+age           0.0296   0.002     12.34   <2e-16 ***
+comorbidity   0.6934   0.070     9.90   <2e-16 ***
+```
+These correspond (since we set it up) to:
+- Intercept = -0.693 ~ log(0.5) as intended.
+- age = 0.0296 (slightly different from 0.03 due to randomness, but close). exp(0.0296)=1.030, ~3.0% increase per year.
+- comorbidity = 0.6934 (close to log(2)=0.6931), exp=2.001 ~ doubles rate.
+
+Now interpret:
+- **age**: Coefficient 0.0296 means each additional year of age multiplies the admission rate by 1.030 (3% increase). 95% CI would be something like [1.026–1.034] if we compute. So older age is associated with slightly higher hospital admission rates. Over a decade, that’s ~30% higher rate (compounding multiplicatively).
+- **comorbidity**: Coefficient 0.6934 means having the comorbidity doubles the admission rate (IRR = exp(0.6934) ≈ 2.00). CI might be [~1.7–2.4]. Highly significant, so comorbidity is a strong risk factor for more admissions.
+- **Intercept**: -0.693 implies baseline age 0? But actually due to offset, intercept corresponds to at age=0 with comorbidity=0, expected rate ~exp(-0.693)=0.50 per year. At age 60 (since age is continuous, maybe better to center age at 60 for interpretability). We could have done that to make intercept meaningful (currently intercept corresponds to a hypothetical newborn of age 0 – not relevant here). If we centered age at 60 in the model, intercept would be log(rate at 60 with no comorbidity) ~ log(0.5). But anyway, the main interpretation focus is on IRRs.
+
+We might want to present results as: 
+“For each 10-year increase in age, the hospital admission rate increased by ~1.34-fold (IRR per year 1.03, so per 10 years ≈ (1.03)^10 ≈ 1.34). Patients with the comorbidity had about 2.0 times the rate of admissions compared to those without, adjusting for age.”
+
+If an offset is used, often we explicitly mention “rate” or “incidence rate”. For example:
+- “The incidence rate of admissions was about 2 times higher in patients with the comorbidity than those without (adjusted IRR = 2.0, 95% CI ...).”
+- “Each additional year of age was associated with a 3% increase in the admission rate (IRR 1.03 per year, p<0.001).”
+
+If we didn’t have an offset, we’d talk per person (assuming all same time). With offset, we talk per unit time. It’s good to mention units: e.g., “per year of follow-up.”
+
+Also note goodness of fit: If we found no overdispersion, fine. If we did, we might report we used robust SE or mention slight overdispersion but adjusted.
+
+### Communicating Results
+Key points for communicating Poisson regression results (counts or rates):
+- **Use incidence rate language**: If an offset (exposure time) is used, emphasize that it’s rates: “incidence rate ratio” or “rate ratio” is correct. If no offset (all same time), you can say “count ratio” or just “times as many events”.
+- **Present IRRs with CI**: e.g., “IRR = 2.0 (95% CI 1.7–2.4)”.
+- **Make it clear it’s multiplicative**: People might not know IRR term, so adding “times higher” helps.
+- **Baseline rate**: Sometimes report baseline rate in one group. E.g., “in patients without comorbidity, the model-predicted admission rate was 0.5 per year (approx one admission every 2 years), whereas with comorbidity it was about 1.0 per year.”
+- **Absolute differences**: With count data, absolute difference is less intuitive (since it depends on baseline and time), but we can say: “At age 60 without comorbidity, predicted 1-year admissions ~0.5. At age 70 with comorbidity, predicted ~2.0 admissions/year.”
+- **Check for overdispersion mention**: If we detected none, no need to mention. If yes and we corrected, say “(using a quasi-Poisson model to account for overdispersion) the IRR was...”.
+- **Avoid calling it hazard ratio**: If someone loosely says “hazard”, clarify by saying rate or incidence. Hazard ratio is specifically from survival models (Cox); Poisson with time is close but not exactly the same unless time intervals are small.
+- **Graphical communication**: A bar chart of rates or a plot of predicted counts by age and group can help. For example, show curve of expected admissions by age for comorbidity vs not.
+- **Interpretation caution**: If an IRR is, say, 2, emphasize it’s the rate, not that each patient has 2x chance (unless one event per person possible). For rare events, doubling rate ~ doubling risk, but for multiple events, it's about frequency.
+- **Causality**: If comorbidity is observational, say “associated with higher rates” not “causes higher admissions”.
+
+In summary, Poisson regression results should be conveyed in terms of multiplicative change in rates. Our example: “Comorbidity is associated with a **100% increase** in the rate of hospital admissions (IRR = 2.0) adjusting for age, while each additional year of age is associated with a **3% increase** in the admission rate.” This gives both relative and an intuitive percentage form.
+
+By following these practices, we align with Harrell’s emphasis on meaningful interpretation – focusing on effect sizes (with CIs) and not just p-values, and checking model fit (like overdispersion) to ensure credibility. Next, we handle time-to-event data with Cox regression.
+
+## Survival Analysis (Cox Proportional Hazards Model)
+
+### Overview
+The Cox proportional hazards model is a semiparametric survival analysis method used to relate covariates to the time until an event (e.g., death, relapse) ([Testing the proportional hazards assumption in cox regression and ...](https://pmc.ncbi.nlm.nih.gov/articles/PMC8161573/#:~:text=,relative%20hazard%20remains%20constant)). It estimates **hazard ratios (HR)** for predictors, which represent relative differences in the instantaneous event rate (hazard) between groups. Cox models are ubiquitous in biostatistics for analyzing clinical trial time-to-event outcomes and cohort study survival data, because they make no assumption about the baseline hazard function (it’s nonparametric) and only assume proportionality of hazards over time.
+
+A hazard ratio can be interpreted as: HR = 2 for a treatment means at any given time, the risk of the event is twice as high in treatment group as in control (assuming proportional hazards). Cox models are preferred when we need to handle *censoring* (some subjects not having the event during follow-up) and when we don’t want to assume a particular survival distribution (like exponential or Weibull). Harrell has extensively used Cox models and advocates checking the **proportional hazards (PH) assumption** and possibly using time-dependent covariates or stratification if PH is violated ([Testing the proportional hazards assumption in cox regression and ...](https://pmc.ncbi.nlm.nih.gov/articles/PMC8161573/#:~:text=,relative%20hazard%20remains%20constant)) ([Cox Regression: A Beginner's Guide - Datatab](https://datatab.net/tutorial/cox-regression#:~:text=Cox%20Regression%3A%20A%20Beginner%27s%20Guide,This%20assumption)).
+
+Use cases: time to death, time to tumor recurrence, time to discharge, etc. In any scenario where the outcome is a time duration and not all subjects experience the event (censoring happens), Cox is a go-to model.
+
+### Model Assumptions
+The Cox model has three key assumptions ([Sample headline goes here](https://health.ucdavis.edu/media-resources/ctsc/documents/pdfs/cph-model-presentation.pdf#:~:text=%E2%80%A2%20Assumption%201%3A%20Independent%20observations,information%20about%20one%20subject%E2%80%99s%20survival)) ([Sample headline goes here](https://health.ucdavis.edu/media-resources/ctsc/documents/pdfs/cph-model-presentation.pdf#:~:text=Assumptions%20of%20the%20Cox%20Proportional,depend%20on%20the%20patient%E2%80%99s%20health)):
+- **Proportional Hazards (PH)**: The hazard ratio for any two individuals is constant over time. In other words, the effect of a covariate is multiplicative on the hazard and does not change as time progresses ([Testing the proportional hazards assumption in cox regression and ...](https://pmc.ncbi.nlm.nih.gov/articles/PMC8161573/#:~:text=,relative%20hazard%20remains%20constant)). For example, if HR for drug vs placebo = 0.5, it should hold at 1 month, 6 months, 2 years, etc. This is the fundamental assumption – if it’s violated (hazards converge or diverge over time), the Cox model might be incorrect or one can use stratified Cox or add time-dependent covariates.
+- **Independent censoring**: Censoring is non-informative, meaning that whether an individual is censored (e.g., lost to follow-up) is unrelated to their underlying hazard of the event ([Sample headline goes here](https://health.ucdavis.edu/media-resources/ctsc/documents/pdfs/cph-model-presentation.pdf#:~:text=Assumptions%20of%20the%20Cox%20Proportional,depend%20on%20the%20patient%E2%80%99s%20health)). Essentially, those who are censored at time t should have the same survival prospects as those who continue, conditional on covariates. Violations occur if, say, sicker patients drop out more often.
+- **Independent observations**: Each subject’s survival time is independent of others (unless accounted for by cluster robust SE or frailty). In multicenter studies or family studies, there may be clustering.
+- **Covariate effects are additive in log-hazard**: Like linearity in logit for logistic, here linearity in log-hazard. Continuous covariates are assumed to have a linear effect on log hazard. One can check this and use splines if needed (functional form).
+- Baseline hazard is unspecified but that’s not an assumption, it’s part of model flexibility. No assumption of particular distribution of survival times.
+- No collinearity etc (general regression concerns).
+
+Harrell emphasizes checking PH assumption through tests or plots ([Testing the proportional hazards assumption in cox regression and ...](https://pmc.ncbi.nlm.nih.gov/articles/PMC8161573/#:~:text=,relative%20hazard%20remains%20constant)). Also, if PH is violated for a covariate, one solution is to model that covariate’s effect as time-dependent (interaction with log time) or stratify by that variable (which allows different baseline hazard for each stratum, effectively removing that effect from HR calculations).
+
+### Simulated Dataset
+Simulating survival times requires specifying a hazard function. We can use `simstudy` or just base R to simulate from an exponential or Cox model.
+
+We’ll simulate a study of 200 patients, with a binary treatment and a continuous biomarker, affecting survival time. Assume exponential baseline hazard for simplicity:
+- Baseline hazard = 0.1 per year (so median survival ~ ln2/0.1 ~ 6.93 years).
+- Treatment has HR = 0.6 (treatment improves survival, reduces hazard by 40%).
+- Biomarker (say, blood pressure) has HR = 1.02 per unit (2% increase in hazard per unit).
+- Include random censoring at 5 years for some (administrative censoring).
+
+```r
+library(simstudy)
+# Define covariates
+def <- defData(varname="treatment", formula=0.5, dist="binary")  # 50% on treatment
+def <- defData(def, varname="BP", formula=130, variance=100, dist="normal")  # BP ~ N(130,10^2)
+
+# Define survival time via Cox model: baseline hazard 0.1, log-HR for treatment = log(0.6), for BP = log(1.02)
+# We use the simstudy survival definition where shape is equivalent to baseline hazard for exponential.
+defSurv <- defSurv(varname="survTime", formula = "log(0.1) + log(1.02)*BP + log(0.6)*treatment", scale = 1)
+# simstudy will interpret formula as log hazard if shape given; scale=1 corresponds to exponential (assuming shape=baseline hazard).
+# Actually, to avoid confusion, we might simulate using rexp manually.
+
+# Instead, do manual simulation: 
+# hazard = 0.1 * 1.02^(BP-130) * 0.6^treatment.
+# Then survival time ~ exponential with that hazard.
+set.seed(111)
+N <- 200
+data_cox <- genData(N, def)
+# Calculate individual hazard rates:
+base_hz <- 0.1
+data_cox[, ind_hazard := base_hz * (1.02)^(BP - 130) * (ifelse(treatment==1, 0.6, 1))]
+# Simulate survival time from exponential distribution with rate = ind_hazard
+data_cox[, survTime := rexp(.N, rate = ind_hazard)]
+# Introduce random censoring at 5 years:
+data_cox[, censored := ifelse(survTime > 5, 1, 0)]
+data_cox[, time := pmin(survTime, 5)]
+# 'time' is observed time, 'censored=1' indicates right-censored at 5 years if event not observed by then.
+
+head(data_cox)
+```
+
+We used a manual approach:
+- Computed each person’s hazard rate based on covariates.
+- Simulated survival time ~ Exponential(rate = hazard).
+- Censored at 5 years if they haven’t had event by then (censored=1 flag).
+
+Now `data_cox` has variables: treatment, BP, time, censored (which acts like an event indicator but 1 for censored, we might want status=0 for censored, 1 for event typically). Let’s create a status variable: `status = 1 - censored` (so 1 = event occurred, 0 = censored).
+Then we can fit Cox:
+
+```r
+data_cox[, status := ifelse(survTime <= 5, 1, 0)]
+library(survival)
+cox_fit <- coxph(Surv(time, status) ~ treatment + BP, data = data_cox)
+summary(cox_fit)
+```
+
+### Assumption Checking
+For Cox models, the big one is **Proportional Hazards**:
+- **Schoenfeld residual test**: `cox.zph(cox_fit)` gives a test per covariate and global. Null hypothesis: PH holds (no time interaction). A p<0.05 suggests violation ([Testing the proportional hazards assumption in cox regression and ...](https://pmc.ncbi.nlm.nih.gov/articles/PMC8161573/#:~:text=Testing%20the%20proportional%20hazards%20assumption,relative%20hazard%20remains%20constant)). We check especially for covariates that might change effect over time.
+- **Schoenfeld residual plots**: Plot residuals or the scaled Schoenfeld residuals vs time for each covariate. If a covariate’s residuals show a trend with time or the fitted line is not horizontal, PH might be violated.
+```r
+cox.zph(cox_fit)
+plot(cox.zph(cox_fit))
+```
+If our simulation is correct, treatment effect (HR 0.6) and BP effect (HR 1.02 per unit) are constant over time, so PH should hold (we expect p>0.05 for both, indicating no violation). If we had found, say, treatment effect wanes with time (maybe HR was not constant), the test might be significant. In that case, a strategy is to add an interaction with time: e.g., `coxph(Surv(time,status) ~ treatment + BP + treatment:tt(time), tt=function(x, t, ...) x*log(t))` to model a time-varying coefficient, or stratify by that variable.
+- **Linearity of covariate effects**: We assume log-hazard vs BP is linear. We can check by categorizing BP or using a spline and seeing if log-likelihood improves. E.g., `cox_fit2 <- coxph(Surv(time,status) ~ ns(BP,4) + treatment, data=data_cox)` and do a LRT. Or use Martingale residuals: plot Martingale residuals vs BP to see if a pattern deviates from linear. (Martingale residuals for Cox act like residuals for continuous covariate functional form checking: non-linear pattern suggests mis-specification.)
+- **Interactions**: Check if any interactions needed (not an assumption per se, but one might test treatment*BP if suspected).
+- **Independent censoring**: Hard to test directly, it’s more a design assumption. We assume our random censoring is independent (which it is, we censored uniformly at 5 years).
+- **No influential outliers**: Use `dfbeta` or `dfbetas` from `coxph` to see if any one subject has a large influence on coefficients (could happen if one subject has very early event and extreme covariate).
+- **No multicollinearity**: Not an issue here with 2 covariates.
+
+So in practice:
+```r
+test.ph <- cox.zph(cox_fit)
+print(test.ph)
+```
+If output shows, e.g., `treatment p=0.8, BP p=0.5, GLOBAL p=0.6`, then PH holds (good). If something was <0.05, we’d diagnose which covariate and potentially adjust.
+
+### Model Interpretation
+`summary(cox_fit)` yields (for example):
+```
+               coef exp(coef)  se(coef)    z      p
+treatment   -0.510   0.600     0.200   -2.55   0.011
+BP           0.0198  1.020     0.007    2.83   0.005
+
+Likelihood ratio test: X^2 = ~25 on 2 df, p= <0.001  (just an example)
+```
+Interpretation:
+- **treatment:** coef = -0.510, HR = exp(-0.510) = 0.600. This means the treatment group’s hazard of the event is 0.60 times that of control group at any time (i.e., 40% reduction in hazard). p=0.011 indicates statistically significant survival benefit. We’d report: “Treatment is associated with a 40% reduction in the hazard of death (HR 0.60, 95% CI ... , p=0.01).” The CI we can get from `confint(cox_fit)`; suppose it’s [0.40–0.90].
+- **BP:** coef = 0.0198, HR = exp(0.0198) = 1.020. So each 1-unit higher BP (mmHg) is associated with a 2% increase in hazard. That’s a small effect per unit. Over 10 mmHg, that’s HR ~1.22 (22% higher hazard). p=0.005, so it’s significant—higher BP adversely affects survival. We’d say: “Each 10 mmHg increase in BP is associated with ~22% higher hazard of event.”
+- **Baseline hazard:** not shown explicitly. Cox doesn’t estimate baseline hazard in closed form, but we could compute a baseline survival curve (`basehaz()` or `survfit()` from the model). Typically, we don’t report baseline hazard, but might report median survival in a reference group. For instance, we could estimate median survival for control at average BP, etc., but often it’s not needed if focus is on covariate effects.
+- **Global test:** likelihood ratio (or Wald) test shows model significance. Not too important to report if individual effects reported.
+
+We also ensure to mention how many events occurred (the power depends on that).
+
+### Communicating Results
+When reporting Cox model results:
+- **Hazard Ratios with CI**: Always give HR and 95% CI. E.g., “HR 0.60 (95% CI 0.40–0.90)”.
+- **Time context**: Emphasize these are relative *hazards*, not guaranteeing long-term risk reduction of same magnitude (though if PH holds, it does in relative terms). Some might misunderstand HR as “by end of study, 40% fewer deaths” – which is not exactly HR, that would be relative risk. Clarify if needed: “at any given time, the risk is 40% lower in treatment group, assuming hazards are parallel over time.”
+- **Censoring and follow-up**: Often mention median follow-up or number censored vs events so audience knows context (e.g., “With 200 patients and 120 events over 5 years...”).
+- **Kaplan-Meier curves**: Typically accompany results graphically. While not part of text, you might describe: “The 2-year survival was 80% in treatment vs 65% in control, consistent with the hazard ratio above.”
+- **Proportional hazards assumption**: If you checked it (you should), you can say “The proportional hazards assumption was tested and not violated (p=0.6).” If it was violated and you did something (like an interaction or stratification), describe that: “Because the effect of treatment changed over time (non-proportional hazards), we modeled a time-by-treatment interaction...” or “we present early and late HR separately” or used a stratified Cox, etc.
+- **Interpretation nuance**: Hazard ratio can be tricky to explain to non-statisticians. Sometimes phrasing it as relative risk at any point in time is okay. Or “patients on treatment had lower risk of death throughout the follow-up period, with about a 40% reduction in hazard compared to placebo.”
+- **Absolute probabilities**: It can help to convert to survival probabilities for a given time to illustrate. E.g., “At 3 years, survival probability was 70% with treatment vs 55% without, estimated from the Cox model.”
+- **Continuous covariates**: For BP, rather than per 1 mmHg, communicate in a practical increment: “per 10 mmHg” as done above.
+- **Avoid causation if observational**: in a trial, treatment effect can be causal; if these were just predictors, say “associated with”.
+- **Multiple covariates**: if many, one might present a table of HRs. But the narrative should pick a few important ones to highlight.
+
+Harrell’s approach in survival analysis also includes emphasizing **calibration of predicted survival** and possibly using **nomograms** for risk prediction. But in reporting results, usually the focus is on hazard ratios.
+
+Also note, if a covariate was not proportional and we stratified on it (meaning we allow different baseline hazard but no HR estimated for it), we’d say “the model was stratified by XYZ to satisfy PH assumption, so the hazard ratio for XYZ is not directly estimated, but the model adjusts for it non-parametrically.”
+
+In summary, communication for Cox model is about hazard ratios and ensuring the audience understands that these are relative instantaneous risks. They are often interpreted similarly to relative risks if the time frame is considered, but strictly they are not exactly the same as a cumulative incidence ratio. For example, a long-term HR of 0.6 might correspond to a larger difference in survival probability over time.
+
+We now move from standard models to some special cases and extensions: longitudinal (mixed-effects) models, quantile regression, etc.
+
+## Longitudinal Modeling – Continuous Outcomes (Linear Mixed-Effects Model)
+
+### Overview
+Longitudinal data arises when subjects are measured repeatedly over time. For continuous outcomes (e.g., blood pressure measured monthly), a **linear mixed-effects model** (LMM) is a common approach. It extends linear regression by adding **random effects** to account for the repeated measures on each subject (which induce correlation between observations) ([Mixed model - Wikipedia](https://en.wikipedia.org/wiki/Mixed_model#:~:text=settings%20where%20repeated%20measurements%20,wider%20variety%20of%20correlation%20and)). The typical LMM has subject-specific intercepts (and possibly slopes), so each subject has their own baseline outcome level, and possibly their own trajectory over time.
+
+This model is preferred because it can handle irregular measurement times, missing data (under missing at random) and it appropriately models within-person correlations without requiring complete data at all time points. It yields estimates of **fixed effects** (population-average effects of predictors) and variance components (between-subject variability). In biostatistics, LMMs are used for analyzing repeated measures in clinical trials (e.g., treatment effect on a continuous outcome over time) and longitudinal observational studies.
+
+Key use case: A clinical trial measuring a continuous outcome (like HbA1c level) at baseline, 3, 6, 12 months. An LMM can estimate the overall treatment effect while accounting for baseline differences and correlation over time. Harrell includes longitudinal models as a crucial part of regression modeling strategies, highlighting the need to model correlation appropriately rather than treat data as independent ([Mixed model - Wikipedia](https://en.wikipedia.org/wiki/Mixed_model#:~:text=settings%20where%20repeated%20measurements%20,wider%20variety%20of%20correlation%20and)).
+
+### Model Assumptions
+Linear mixed models carry assumptions from linear regression plus those about random effects ([Regression Diagnostics in Generalized Linear Mixed Models - The Analysis Factor](https://www.theanalysisfactor.com/regression-diagnostics-glmm/#:~:text=Assumption%3A%20Random%20effects%20come%20from,a%20normal%20distribution)) ([Regression Diagnostics in Generalized Linear Mixed Models - The Analysis Factor](https://www.theanalysisfactor.com/regression-diagnostics-glmm/#:~:text=Assumption%3A%20The%20chosen%20link%20function,is%20appropriate)):
+- **Linear relationship**: The fixed effects relate linearly to the outcome (as in standard linear regression) – e.g., time and treatment have linear additive effects on the mean outcome.
+- **Normality of residuals**: The residuals (within-person errors) are usually assumed ~ N(0, σ^2) at each time.
+- **Homoscedasticity of residuals**: Often assumed constant residual variance across time and individuals (though one can model heteroscedasticity or autocorrelation if needed).
+- **Random effects distribution**: Random effects (e.g., random intercepts, slopes) are assumed to follow a normal distribution across the population ([Regression Diagnostics in Generalized Linear Mixed Models - The Analysis Factor](https://www.theanalysisfactor.com/regression-diagnostics-glmm/#:~:text=Assumption%3A%20Random%20effects%20come%20from,a%20normal%20distribution)). For example, intercepts ∼ N(0, τ^2). Also assumed independent of residuals.
+- **Independence**: Given the random effects, observations are independent. Also, random effects of different subjects are independent of each other. Essentially, the only source of correlation is through the random effects (or any specified residual correlation structure).
+- **Correct covariance structure**: If using a more complex correlation (like AR(1) for residuals), that should be correctly specified. Often, a simple random intercept model assumes equal correlation for all pairs within a subject (compound symmetry). If data show, say, correlation that decays over time, an AR(1) or random slope might be needed.
+- **Missing at random**: Not a model assumption per se, but for valid inference with incomplete longitudinal data, we assume any missingness does not depend on unobserved outcomes (given covariates).
+
+Assumption checking involves:
+- Checking normal QQ plot of random effects and residuals ([Regression Diagnostics in Generalized Linear Mixed Models - The Analysis Factor](https://www.theanalysisfactor.com/regression-diagnostics-glmm/#:~:text=the%20random%20effects,intercepts%20and%20slopes%E2%80%94are%20normally%20distributed)).
+- Checking if residual variance looks constant across fitted values or time.
+- Possibly checking if random effects and residuals are independent (usually okay if model is correct).
+- Linearity: If time effect is non-linear, use time^2 or splines; if a covariate effect changes over time, include interactions with time.
+- As with any linear model, outliers or influential subjects can be assessed (a whole subject’s data might be an outlier cluster).
+
+### Simulated Dataset
+Simulate a longitudinal continuous outcome: e.g., patients’ systolic BP measured at 5 time points (0,3,6,9,12 months) for two treatment groups.
+
+We use `simstudy` to create a cluster (subject) and add random intercept and slope:
+
+```r
+library(simstudy)
+# Define subject-level data
+def <- defData(varname="treatment", formula=0.5, dist="binary")       # 50% subjects in treatment
+def <- defData(def, varname="baseBP", formula=120, variance=100, dist="normal")  # baseline BP mean 120, SD 10 (subject-specific true baseline)
+
+# Generate 100 subjects
+set.seed(42)
+subjects <- genData(100, def)
+
+# Now define longitudinal measurements (5 time points for each subject)
+# Create time points 0,3,6,9,12 (we can do wide or long format generation in simstudy)
+dtLong <- genCluster(subjects, "id", numIndsVar = 5, level1ID = "obsid")
+# This duplicates each subject 5 times, we will add a time variable and outcome
+dtLong <- addColumns(defDataAdd(varname="time", formula="0;3;6;9;12", dist="nonrandom"), dtLong)
+
+# Define the longitudinal outcome model
+# Let's allow a random intercept per subject around baseBP, and fixed slope over time plus treatment effect on slope.
+# For simplicity, use baseBP as the random intercept (already varies by subject).
+# Model: BP = baseBP + (-0.5 * time) + (-2 * treatment * time/12) + noise, where time is in months.
+defLong <- defDataAdd(varname="linpred", 
+                      formula="baseBP - 0.5*time + -2*(treatment*time/12)", dist="nonrandom")
+defLong <- defDataAdd(defLong, varname="BP", formula="linpred", variance=16, dist="normal")  # residual SD=4
+
+dtLong <- addColumns(defLong, dtLong)
+head(dtLong, 10)
+```
+
+Explanation:
+- Each subject has a `baseBP` drawn ~N(120, 10^2). That acts as their random intercept.
+- We simulate measurements at time 0,3,6,9,12 for each subject.
+- Model: *On average*, BP decreases 0.5 units per month (so 6 over a year) – maybe a slight improvement over time for all.
+- Treatment effect: an additional -2 over 12 months (so at 12 months, treated are 2 units lower than control beyond the time effect). Implemented as `-2 * (treatment * time/12)` which yields 0 at time 0 and -2 at time=12 if treatment=1.
+- Residual variance 16 (SD 4) around that line.
+- We did not explicitly simulate a random slope, only random intercept via baseBP differences. baseBP itself varied by subject.
+
+This data can be analyzed by LMM:
+```r
+library(lme4)
+lmm_fit <- lmer(BP ~ time * treatment + (1|id), data=dtLong)
+summary(lmm_fit)
+```
+We include time*treatment to allow different slopes by treatment (which we did simulate: treat has slightly more decline).
+
+### Assumption Checking
+- **Normality**: Check QQ plot of residuals and random effects. `qqnorm(ranef(lmm_fit)$id[[1]]); qqline(...)` for random intercepts. Similarly `qqnorm(residuals(lmm_fit)); ...`. We expect roughly normal since simulated.
+- **Homoscedasticity**: Plot residuals vs fitted or vs time to see if spread changes. If at later times variance is bigger/smaller systematically, might need to model that.
+- **Independence**: We accounted for within-id correlation via random intercept. Check if residuals within subject show any pattern (maybe autocorrelation if needed AR(1)). Could plot residuals by subject to see any obvious pattern remaining.
+- **Linearity**: We assumed linear time effect. Could check if maybe a quadratic time term is needed by adding time^2 and seeing significance. 
+- **Random effects**: Are they needed? Check variance of random intercept in summary. If it’s near zero, model might effectively reduce to OLS with repeated measures (not likely here, baseBP differences should cause significant variance).
+- **Influence**: Some subjects might have very off trajectories (maybe one subject’s all readings are weird). Check outliers by subject via random effect distribution or cook’s distance analog for mixed models (`influence.ME` package).
+
+Since we simulated relatively cleanly, likely:
+- Random intercept variance will be ~100 (since baseBP had SD10).
+- Residual SD ~4, as set.
+- Checks should look okay. If, for instance, residual QQ is fine.
+
+### Model Interpretation
+From `summary(lmm_fit)` we expect something like:
+```
+Fixed effects:
+(Intercept)           ~120 (close to mean baseline of controls)
+time                -0.50 (per month change in control)
+treatment            0.00 (treatment main effect at time0, likely small since at baseline both groups ~equal, maybe slight diff due to baseBP distribution)
+time:treatment      -0.17 (this would yield -0.17*12 = -2.0 at 12 months, matching our sim)
+
+Random effects:
+Intercept variance ~100 (std dev ~10)
+Residual variance  16 (std dev 4)
+```
+Interpreting:
+- **(Intercept)** ~120: This is the estimated mean BP at time=0 for the reference group (control, since treatment likely coded 0/1). That matches our simulation where average baseBP ~120. We’d report that baseline BP ~120 mmHg.
+- **time** = -0.5: The control group’s BP change per month is -0.5 mmHg (so over a year ~ -6 mmHg). p-value would be significant if we have enough data.
+- **treatment** main effect: possibly near 0 and not significant, which indicates at baseline the groups did not differ significantly (assuming randomization).
+- **time:treatment** = -0.17: The additional decline in BP per month for the treatment group beyond control. Over 12 months, that’s -2 mmHg more. So treatment group has a slightly steeper downward trend. We’d interpret this interaction: “The treatment group’s rate of BP reduction was 0.17 mmHg per month greater than control, totaling an extra ~2 mmHg drop over 12 months (p=...).”
+- **Random intercept variance**: e.g., SD ~10: This indicates significant between-subject variability in baseline BP. Each patient’s intercept varies with SD about 10 mmHg, which is expected.
+- (If we had random slope, we’d also interpret that variance).
+- **Residual** SD 4: variation of measurements around each patient’s trajectory.
+
+Often one also looks at **Correlation of random effects** if both intercept and slope are random. In our model, only intercept random, so not applicable.
+
+Interpretation to communicate:
+- We have both baseline (intercept) and change (slope) differences. The primary interest is often in the time by treatment interaction for treatment effect over time. We’d say: “There was a significant treatment-by-time interaction indicating the treatment group’s blood pressure decreased faster over time compared to controls. Specifically, treatment patients had an additional -2.0 mmHg (95% CI …) reduction over 1 year (p=...).” 
+- If the treatment main effect is not significant (which it might not be at baseline, as expected in a trial), that’s okay.
+- We might also give the estimated mean at final time for each group: e.g., at 12 months, control mean ~ 120 + (-0.5*12) = 114 mmHg, treatment mean ~ 120 + (-0.5*12) + (-0.17*12) = 112 mmHg. So difference ~2 mmHg at 12 months.
+- We can mention between-patient variability: “The model included a random intercept for each patient, with SD ~10 mmHg, indicating substantial variability in baseline BP across individuals.”
+- Usually, we also mention model fit: e.g., AIC or R² analog (for mixed models, conditional R² vs marginal R² can be given via `MuMIn::r.squaredGLMM`).
+- If any assumption issues (none serious here), mention e.g., “Residuals appeared roughly normal and homoscedastic. No significant deviations from model assumptions were noted.”
+
+### Communicating Results
+For a longitudinal continuous outcome LMM:
+- **Describe fixed effects results in terms of differences over time**. Often, it's easier to communicate in terms of predicted values at specific time points. For instance: “At baseline, groups were similar (mean ~120). After 12 months, the treatment group’s mean BP was ~2 mmHg lower than the control group, after adjusting for baseline levels. However, this difference was modest and one might question clinical significance if p-value were borderline, etc.”
+- **Emphasize trajectory**: “BP declined over time in both groups (by ~0.5 mmHg/month in controls). The treatment accelerated this decline slightly.”
+- If significant: “This suggests the treatment had a small but measurable effect in lowering BP over the year.”
+- **Random effects**: It might be too technical for some audiences to detail variance components. However, you can say “There was considerable patient-to-patient variability (SD ~10 mmHg), indicating need for the patient-specific random intercept in the model.” If writing for a stats audience, report the variance estimates; for clinical, not necessary.
+- **Correlation**: If relevant (e.g., if random slope included, you might say we allowed each patient to have their own rate of change).
+- **Model type**: mention it’s a mixed-effects model (a.k.a. multilevel model), so they know repeated measures were appropriately handled. E.g., “Using a linear mixed-effects model with random intercept per patient…”.
+- **Missing data**: If applicable, mention how missing measurements were handled (LMM can handle it inherently under MAR).
+- **Interpretation caution**: Ensure not to interpret fixed effects like causal unless appropriate. If it's a trial, we can interpret treatment effect as causal. If observational longitudinal, careful about confounding.
+- Use graphs: A plot of mean profiles over time by group with model fit lines is great to illustrate. In text, one might describe such a plot.
+
+Following Harrell’s philosophy, we focus on the estimated effect and its uncertainty rather than just “p<0.05”. Also, note that “time” here was treated linearly; if the trend appeared non-linear, we would mention testing polynomial or spline which could be a further nuance.
+
+Next, we will look at longitudinal binary outcomes.
+
+## Longitudinal Modeling – Binary Outcomes (Generalized Linear Mixed Model)
+
+### Overview
+For longitudinal binary outcomes (repeated yes/no measures per subject), we use **generalized linear mixed models (GLMM)**, typically logistic mixed-effects models. This extends logistic regression by adding random effects (usually random intercepts for subjects) to account for within-subject correlation. 
+
+Example use case: patients measured at multiple visits for presence/absence of a symptom. A random intercept logistic model assumes each patient has their own propensity for the outcome, and we estimate population-averaged effects of predictors like time or treatment. This model yields **subject-specific (conditional) odds ratios** for covariate effects. In biostatistics, GLMMs for binary outcomes are common in longitudinal studies or clustered data (like patients within hospitals).
+
+The advantage is we can estimate how odds change over time or with treatment while accounting for repeated measures. An alternative approach is **GEE (generalized estimating equations)** which gives population-averaged estimates; however, GLMM is more flexible for including random effects and handling missing data under MAR.
+
+### Model Assumptions
+Assumptions parallel those of logistic regression plus the random effects:
+- **Proper distribution/link**: Outcome conditional on random effects follows Bernoulli with probability given by logistic function. Random effects usually assumed normal (on logit scale) ([Regression Diagnostics in Generalized Linear Mixed Models - The Analysis Factor](https://www.theanalysisfactor.com/regression-diagnostics-glmm/#:~:text=Assumption%3A%20Random%20effects%20come%20from,a%20normal%20distribution)). So for random intercept: $b_i \sim N(0, \tau^2)$ and $\logit(P(Y_{ij}=1)) = \beta_0 + b_i + \beta_1 X_{ij}+...$.
+- **Independent random effects**: Each subject’s random effect is independent of others, and of covariates (commonly assumed).
+- **Independent residuals given random effects**: Given $b_i$, outcomes for subject i at different times are independent (the dependence is captured by $b_i$).
+- **Linearity of covariates on logit**: As with logistic, need correct functional form for continuous predictors. We assume linear in logit unless specified otherwise.
+- **No overdispersion beyond random effects**: If the random effect doesn’t fully capture extra correlation or variability, there could be residual overdispersion. Often a random intercept suffices; if not, maybe random slopes or other correlation structures might be needed.
+- **Sufficient data per cluster**: Each subject should have enough variation (not all outcomes the same ideally, or if a subject always 0 or always 1, that subject’s data doesn’t inform the fixed effect much but does inform random intercept distribution).
+- **Random effects normality**: Hard to test robustly, but one can check if estimated random intercepts (BLUPs) appear roughly normal.
+
+Assumption checking:
+- **Linearity in logit**: e.g., if time effect is non-linear, include quadratic time or piecewise.
+- **PH-like assumption?** Not exactly relevant here since no time-to-event, but if you have time-varying effects you can model them via interactions (e.g., treatment effect changes over time).
+- **Random effects check**: Check distribution of random intercepts (maybe via a caterpillar plot or QQ plot). Also check if adding a random slope is needed: e.g., does model fit significantly better with random slopes? Use likelihood ratio test on nested models (mindful that it’s on boundary so a mixture chi-square).
+- **Residuals**: Pearson residuals can be computed; if many 0/1 and model is good, residuals won’t be very enlightening except to detect if certain cells systematically off. A conditional residual approach or the **DHARMa** package can simulate residuals for GLMM to check for patterns.
+- **Influence**: Identify if a particular subject with all 1s or 0s and maybe extreme covariate could unduly influence random effect variance.
+
+### Simulated Dataset
+Simulate an example: Patients have a binary outcome measured at 4 visits (e.g., symptom present vs absent over time). Suppose treatment reduces odds of symptom over time.
+
+```r
+library(simstudy)
+# Subject level definition
+def <- defData(varname="treatment", formula=0.5, dist="binary")
+def <- defData(def, varname="random_logit", formula=0, variance=1, dist="normal")  
+# random intercept for logit, variance ~1
+
+subjects <- genData(200, def)
+
+# Expand to 4 time points per subject
+dtLong <- genCluster(subjects, "id", numIndsVar = 4, level1ID = "obsid")
+dtLong <- addColumns(defDataAdd(varname="visit", formula="1;2;3;4", dist="nonrandom"), dtLong)
+
+# Define outcome probability
+# Model: logit(P) = random_logit + beta0 + beta1*visit + beta2*treatment + beta3*visit*treatment
+# Say beta0 = -1 (at visit1 control, baseline 27% chance since logit -1 ~ p=0.27)
+# beta1 = 0.2 (odds increase over visits in control, maybe symptom gets more likely over time)
+# beta2 = -0.5 (treatment overall lower odds)
+# beta3 = -0.3 (treatment slows the increase per visit)
+logit_formula <- "-1 + 0.2*(visit-1) - 0.5*treatment - 0.3*(visit-1)*treatment + random_logit"
+defLong <- defDataAdd(varname="logitP", formula=logit_formula, dist="nonrandom")
+defLong <- defDataAdd(defLong, varname="symptom", formula="logitP", dist="binary", link="logit")
+
+dtLong <- addColumns(defLong, dtLong)
+head(dtLong, 8)
+```
+
+We gave:
+- random_logit ~ Normal(0,1) as a subject-specific intercept on logit (SD=1 implies significant heterogeneity in baseline odds).
+- At visit=1 (baseline), control logit = -1 + random; treatment logit = -1 - 0.5 + random.
+- Over visits, control logit increases by 0.2 each visit (so odds ~exp(0.2)=1.22 times per visit).
+- Treatment has -0.3 per visit extra, so net per visit increase is 0.2-0.3 = -0.1 (slight decrease in odds over time for treatment).
+- So initially, treatment lower odds, and they don’t increase as much.
+
+We fit a GLMM:
+```r
+library(lme4)
+glmm_fit <- glmer(symptom ~ visit * treatment + (1|id), data=dtLong, family=binomial)
+summary(glmm_fit)
+```
+We only used random intercept (which we simulated). Possibly we could consider random slope for time if needed, but stick to intercept for now.
+
+### Assumption Checking
+- **PH assumption equivalent?** Here, PH is not relevant; instead, the analogous concept is whether the odds ratio for treatment is constant across visits (we allowed interaction, so we relax that).
+- We should check if random intercept variance is appropriate: does adding it improve model vs a standard logistic (we know yes, since we simulated).
+- Check `VarCorr(glmm_fit)` to see estimated variance ~1.
+- Check linearity of visit effect: we treated visit as numeric (1 to 4). If outcome trend is non-linear (it might be roughly linear in logit though since we did that). We could treat visit as factor to not assume linear spacing, see if that fits much better (likely not needed since we simulated linear trend).
+- **Schoenfeld residuals** are for Cox, not here. Instead use `cox.zph` equivalent? Not directly.
+- Use **DHARMa**:
+```r
+library(DHARMa)
+res <- simulateResiduals(glmm_fit, n=1000)
+plot(res) 
+```
+This will do a simulation-based residual diagnostic. Ideally, points should not show significant deviations; a KS test is also done.
+- Check random intercept distribution:
+```r
+ranefs <- ranef(glmm_fit)$id[,1]
+qqnorm(ranefs); qqline(ranefs)
+```
+Should be roughly straight (we simulated normal).
+- **Overdispersion**: For binomial glmm, a quick check is if residual deviance >> df (though with random effects, deviance isn’t straightforward). There is a function `overdispersion_glmer` (some custom function or use DHARMa’s testDispersion).
+```r
+testDispersion(res)
+```
+If that is okay (likely yes since random intercept accounts for extra variability).
+
+### Model Interpretation
+We expect `summary(glmm_fit)` fixed effects ~:
+```
+            Estimate  Std.Error  z value  Pr(>|z|)
+(Intercept) -1.0      ...        ...      ...
+visit        0.2      ...        ...
+treatment   -0.5      ...        ...
+visit:treat -0.3      ...        ...
+```
+Interpreting:
+- **(Intercept)**: = -1.0 (approx) which corresponds to baseline (visit1, control group) log-odds of symptom. p might not be that interesting, it's just baseline incidence.
+- **visit**: 0.2 means in control group, each increase in visit number (from 1 to 2, etc) multiplies odds by exp(0.2)=1.22. Over three increments (visit1 to 4), that’s exp(0.6)=1.82 (so odds nearly double from visit1 to visit4 in control). We’d say “In the control group, the odds of symptom increase over time (OR ~1.22 per visit, p=...). Possibly because condition worsens if untreated.”
+- **treatment**: -0.5 main effect means at baseline, treatment group’s odds are exp(-0.5)=0.61 times control (they have lower symptom odds at start, though if randomization, ideally baseline difference would be 0; here we simulated some difference, maybe not realistic – in a real trial we wouldn't expect baseline difference if randomized. But anyway).
+- **visit:treatment**: -0.3 means the trend over visits for treatment is 0.3 less than control, i.e., treatment group’s odds might slightly decrease or increase slower. For treatment, net visit effect = 0.2 + (-0.3) = -0.1, so OR per visit ~0.90 (a 10% decrease per visit). Over 3 intervals, that’s ~0.9^3=0.73 (27% reduction from visit1 to 4).
+- It might be more intuitive to evaluate at final visit:
+   - Control at visit4: logit = -1 + 0.2*3 = -1 + 0.6 = -0.4 -> p ~0.40.
+   - Treatment at visit4: logit = -1 -0.5 + (-0.1*3) = -1.5 -0.3 = -1.8 -> p ~0.14.
+   So by visit4, 40% control vs 14% treatment have symptom. That’s the effect of both baseline diff and trend diff.
+- If baseline difference (treatment effect at visit1) is significant, one might adjust or simply note it. In a trial context, we might actually code it such that the treatment effect at baseline is 0 (by including random intercept covers baseline differences, or one could center).
+- But main interest is often overall effect of treatment over time. The interaction suggests treatment group improved relative to control.
+
+We might report:
+  “Odds of symptom in control group increased over time (OR 1.22 per visit, p<0.01). The treatment group started with lower odds at baseline (OR 0.61 relative to control, p=0.2 [if not significant]) and, importantly, showed a different trajectory: the treatment’s odds of symptom did not increase over time (interaction OR 0.74 per 3 visits, equivalent to ~10% decrease per visit, p=0.03). By the final visit, the model-estimated probability of symptom was ~14% in the treatment group vs ~40% in controls.”
+
+- **Random effect**: Variance ~1 (SD ~1), meaning there’s substantial unexplained heterogeneity between subjects. Some subjects have consistently higher odds across all visits, some lower.
+- If needed, mention ICC (intra-class correlation) for the binary outcome. For logistic, ICC = var(random)/(var(random) + π^2/3) (because logistic variance ~3.29). If var ~1, ICC ~1/(1+3.29)=~0.23, meaning ~23% of variance attributable to subject differences. This can be mentioned: “There was clustering within subjects (ICC ~23%).”
+
+### Communicating Results
+For a GLMM logistic:
+- Similar to logistic output but clarify it’s *within-subject odds ratios*. Random intercept means these ORs are conditional on subject effects. If asked for marginal effects, that’s another layer. Usually, report them as is.
+- **Time and treatment effects**: Focus on how odds change over time in each group. Possibly give predicted probabilities at key time points by group.
+- “By visit 4, treatment group had significantly lower odds of symptom than control (OR ~0.22, from probabilities 14% vs 40%).”
+- Keep wording clear: “odds” vs “probability”.
+- Emphasize longitudinal nature: “We accounted for repeated measures on subjects using a random intercept. After adjustment, ...”.
+- Possibly mention correlation: “Subject-specific random intercept standard deviation was ~1 (on logit scale), indicating some patients have consistently higher odds of symptom (due to unobserved factors) – about 23% of variance was between subjects.”
+- If using GEE instead, we’d talk about population-averaged OR which might differ slightly. But since we used GLMM, stick to that.
+- Avoid overinterpreting baseline difference if it’s not significant or if it’s random – in a randomized study baseline difference is by chance.
+
+All communication should cater to both technical correctness (mention it's a mixed model, ORs, etc.) and practical meaning (symptom prevalence differences). Graphical depiction (like a line plot of observed or model-fitted prevalence over time by group) would complement the report.
+
+Now, moving to count outcomes longitudinally.
+
+## Longitudinal Modeling – Count Outcomes (GLMM for Counts)
+
+### Overview
+For repeated count outcomes (e.g., number of attacks per month measured monthly for each patient), we use a Poisson (or negative binomial) mixed-effects model. This is analogous to the continuous and binary cases but with a Poisson distribution assumption and log link. It accounts for within-subject correlation via random effects (often random intercepts). The model yields **incidence rate ratios (IRR)** for covariates conditional on random effects.
+
+Use cases: counts of events for each subject over multiple intervals. For example, asthma attacks recorded each week for patients on two treatments. A Poisson GLMM can estimate the treatment effect on attack rates while accounting for patient-specific propensity (some patients are generally more prone to attacks).
+
+### Model Assumptions
+Building on Poisson regression and mixed models:
+- **Poisson distribution of counts given random effects**: $Y_{ij} | b_i \sim \text{Poisson}(\mu_{ij})$, and $\log(\mu_{ij}) = \beta^T X_{ij} + b_i$ for a random intercept model. Random intercept $b_i \sim N(0,\tau^2)$ on log scale.
+- **Independence conditional on random effect**: Given $b_i$, counts for subject i are independent (often reasonable).
+- **Mean-variance relationship**: The overdispersion can be handled by random intercept partly. If still overdispersed, maybe a random intercept is not enough or a negative binomial random effect model could be considered.
+- **Random effects normality** as usual.
+- **Linearity in log**: Covariates have multiplicative effects on rate.
+- **No zero-inflation unmodeled**: If too many zeros, consider zero-inflated models.
+
+Check:
+- Overdispersion: After including random intercept, see if residual variance > expected. Possibly test via Pearson residuals or use DHARMa again.
+- Random effect distribution and necessity: if variance is large and significantly >0 (likely if individuals differ).
+- If outcome trend over time: check if time effect linear on log scale or if need nonlinear time.
+- Possibly check if a random slope for time improves fit (some individuals might have different progression).
+- If data are counts per interval, maybe use an offset if intervals lengths vary.
+
+### Simulated Dataset
+Example: 50 patients, weekly seizure counts for 8 weeks. Treatment vs placebo. Treatment reduces rate gradually maybe.
+
+```r
+library(simstudy)
+def <- defData(varname="treatment", formula=0.5, dist="binary")
+def <- defData(def, varname="log_rate0", formula="log(1.5) - 0.5*treatment", variance=0.25, dist="normal")
+# log_rate0 ~ Normal(log(1.5) - 0.5*treatment, sd=0.5) as random intercept (so baseline rate ~1.5 for control, ~0.9 for treatment, with variation)
+subjects <- genData(50, def)
+# cluster for weeks
+dtLong <- genCluster(subjects, "id", numIndsVar=8, level1ID="obsid")
+dtLong <- addColumns(defDataAdd(varname="week", formula="1;2;3;4;5;6;7;8", dist="nonrandom"), dtLong)
+# log rate model: baseline log_rate0 + time effect + maybe treatment-time interaction
+# Suppose without treatment, slight increase in rate over time, with treatment, slight decrease.
+lograte_formula <- "log_rate0 + 0.05*(week-1) - 0.1*(week-1)*treatment"
+defLong <- defDataAdd(varname="logmu", formula=lograte_formula, dist="nonrandom")
+defLong <- defDataAdd(defLong, varname="count", formula="logmu", dist="poisson", link="log")
+dtLong <- addColumns(defLong, dtLong)
+head(dtLong, 10)
+```
+
+We did:
+- Each patient has a random intercept `log_rate0` (with treatment effect built in: treat mean ~log(0.9), control ~log(1.5), and SD 0.5).
+- weekly trend: control +0.05 per week (rates go up ~5% per week if untreated), treatment: -0.1 per week extra (so net -0.05 per week, slight decline).
+- So by week8, control ~ exp(log(1.5)+0.05*7) =1.5*exp(0.35)=1.5*1.42=2.13 avg count, treat ~ exp(log(0.9)+(-0.05*7))=0.9*exp(-0.35)=0.9*0.70=0.63.
+
+We fit:
+```r
+library(lme4)
+glmm_pois_fit <- glmer(count ~ week * treatment + (1|id), data=dtLong, family=poisson)
+summary(glmm_pois_fit)
+```
+
+### Assumption Checking
+- Overdispersion: use `testDispersion(simulateResiduals(glmm_pois_fit))`. Random intercept likely absorbed some, but maybe still check.
+- Random intercept distribution: `qqnorm(ranef(glmm_pois_fit)$id[[1]])`.
+- Check if random slope for week needed: could compare AIC of `(1|id)` vs `(1+week|id)`. Possibly not necessary given small N unless trend variation is large.
+- Zero inflation: if a lot of zeros, maybe check if model underestimates zeros (DHARMa has `testZeroInflation`).
+- We likely see random intercept variance ~0.25 from simulation (maybe slightly diff).
+- If any convergence warnings, consider them (if data sparse).
+- In simulation, should be fine.
+
+### Model Interpretation
+Expect fixed effects roughly:
+```
+(Intercept) ~ log(1.5)=0.405 (control at week1 baseline)
+week         0.05  (control trend per week)
+treatment   -0.50  (treatment vs control at baseline)
+week:trt    -0.10  (additional slope for treatment)
+```
+Exponentiated:
+- Intercept 0.405 => 1.50 events/week baseline control.
+- week effect: e^0.05=1.051, ~5.1% increase in rate per week for control.
+- treatment: e^-0.5=0.607, baseline treatment group has ~0.61 times the rate of control (we built that in).
+- week:trt: e^-0.10=0.905, so treatment group's weekly rate change is 0.905 of control’s per week, meaning instead of increasing 5% per week, treatment might actually decrease ~5% (since 1.051*0.905 ~0.95 net per week).
+- Or simply compute net: for treatment, effect per week = 0.05 + (-0.10) = -0.05 (log scale), exp(-0.05)=0.951, a 4.9% decrease per week.
+
+By week 8:
+- control ~2.13, treatment ~0.63 as predicted, ratio ~0.30.
+
+We’d interpret:
+- At baseline (week1): treatment had lower event rate (0.9 vs 1.5 per week, IRR 0.61) maybe not significant if small N or maybe yes if fairly different (p maybe ~0.1 or 0.05 given variance 0.25).
+- Over time, control’s rate increased by ~5% per week (compounded ~42% by week8), while treatment’s rate decreased ~5% per week (compounded ~30% decrease by week8).
+- So by end, big difference.
+- The interaction is key: we could say by week8 the rate ratio between groups = exp(treatment + week:trt*7) = 0.607 * exp(-0.10*7) = 0.607 * 0.497 = 0.302 (so ~0.30).
+- We can present that as: “At week 8, the estimated mean count was ~0.63 in treatment vs ~2.1 in control (a rate ratio of ~0.30).”
+- The model’s significance: likely week:trt is significant, showing divergence of trends.
+
+We also consider random effect:
+- If Var ~0.3, on log scale SD ~0.55. That’s moderate heterogeneity in baseline rates. We might mention it if relevant: some patients have persistently higher or lower counts (we accounted for that).
+- Possibly check residual vs fitted to ensure no pattern, but not too informative for counts.
+
+### Communicating Results
+- Emphasize *rates* and *rate ratios*:
+  “In the control group, seizure rate increased over time (IRR 1.05 per week, p=...). The treatment group started with a lower rate and showed a decline over time (interaction p<0.01). At week 1, the treatment group’s rate was about 0.61 times that of control (not significant if CI includes 1), and by week 8 it was about 0.30 times (i.e., 70% lower, 95% CI ..., p<0.001).”
+- If baseline difference not significant, we might simplify: “No significant difference at baseline, but by week 8 a substantial difference emerged.”
+- Mention random intercept: maybe as “random subject effects were included to account for baseline differences; the variance suggests about a 50% SD in baseline rates between patients.”
+- Always include “per unit time” context: e.g., “per week” in IRR. Possibly convert to per-month or per 7 weeks just to get more meaningful scale if needed.
+- If model used Poisson, fine. If we had to use NB (not here), mention that as fix for overdispersion.
+- If many zeros: we might say e.g., “Many patients had zero events; the model handled this via random effects, which seemed adequate as no extra zero-inflation was detected.”
+- Could also report an overall test like likelihood ratio for time*treatment.
+- Graphically: a plot of mean count vs week for each group with data points would help. In text, describing that “the treatment group’s counts dropped on average, whereas control increased.”
+- Causality: If it’s a trial, can interpret as treatment effect on rate. If observational, careful (but in simulation we set a cause).
+
+So, the key in communication is translating the GLMM output (which is log scale) into meaningful statements about rates and their ratios. Possibly give both relative (IRR) and absolute differences (counts per time).
+
+Finally, we move to two other specialized models: quantile regression and beta regression (bounded proportion), and Tobit.
+
+## Quantile Regression
+
+### Overview
+Quantile regression models the conditional quantile of an outcome as a function of predictors, rather than the mean. For example, median regression (quantile = 0.5) estimates how the median of the outcome changes with covariates. This method is useful when the distribution of the outcome is skewed or heteroscedastic, or when one is specifically interested in a particular percentile (e.g., the 90th percentile of hospital stay length).
+
+In biostatistics, quantile regression can be applied to things like cost data (often skewed) or lab values where extreme percentiles matter. It makes no distributional assumptions (unlike linear regression’s normality) ([Quantile Regression - IBM](https://www.ibm.com/docs/en/spss-statistics/saas?topic=regression-quantile#:~:text=Quantile%20Regression%20,the%20influence%20of%20outlying)) ([Quantile Regression](https://www.ibm.com/docs/en/spss-statistics/saas?topic=regression-quantile#:~:text=Ordinary%20Least%20Squares%20regression%3A)), and is robust to outliers. Harrell’s work includes quantile regression as a flexible tool when OLS assumptions fail or when focus is not on the mean ([Regression Modeling Strategies](https://hbiostat.org/rmsc/#:~:text=apply%20to%20almost%20any%20regression,informed%20choice%20of%20predictive%20tools)). It is a semi-parametric approach.
+
+Quantile regression is preferred when:
+- The effect of covariates might differ across the distribution of Y (e.g., a drug might reduce high values of blood pressure more than low values).
+- We want a more complete picture than just mean differences (maybe 25th and 75th percentile differences).
+- No assumption of constant variance or normal residuals ([Quantile Regression](https://www.ibm.com/docs/en/spss-statistics/saas?topic=regression-quantile#:~:text=predictor%20is%20required%20to%20run,Related%20procedures)).
+
+### Model Assumptions
+Quantile regression has minimal assumptions:
+- **Linear relationship for the quantile**: It assumes the quantile of interest is a linear function of predictors. That is, for quantile τ, $Q_Y(τ|X) = \beta_0^{(τ)} + \beta_1^{(τ)}X_1 + ...$. This is similar to linear regression but focusing on quantile. If the true relationship is nonlinear, one should include nonlinear terms or do separate quantile regressions in segments.
+- **Independent observations**: Still need independence of observations (like any regression) for valid inference.
+- **No distributional assumption**: We do not assume normality or equal variance ([Quantile Regression - IBM](https://www.ibm.com/docs/en/spss-statistics/saas?topic=regression-quantile#:~:text=Quantile%20Regression%20,the%20influence%20of%20outlying)). It's essentially optimization-based (minimizing sum of absolute deviations for median, or weighted absolute for other τ).
+- **No heavy multi-collinearity** (common to all regression).
+- There's no assumption about residuals; heteroscedasticity is allowed, actually quantile regression inherently handles varying spread.
+
+One subtle point: quantile regression does not guarantee that the estimated quantiles won’t cross (i.e., coefficients for higher quantile could yield lower predicted value than for a lower quantile in some ranges). However, in practice with enough data and correct specification, it's usually fine. There are methods to enforce non-crossing if needed.
+
+### Simulated Dataset
+Simulate a scenario where outcome distribution is skewed. E.g., patient hospital LOS (length of stay) in days, where most have short stays but a few have very long stays. Suppose we have an intervention and a severity score predictor.
+
+```r
+# Simulate data for quantile regression
+set.seed(123)
+n <- 300
+severity <- runif(n, 0, 1)           # severity score [0,1]
+intervention <- rbinom(n, 1, 0.5)
+# Let's create outcome such that median is influenced less than upper quantile.
+# Base outcome ~ Exponential depending on severity and intervention.
+# Exponential: we simulate a skewed distribution.
+base_hazard <- 0.1 + 0.3*severity - 0.05*intervention   # hazard per day
+# ensure hazard >0
+base_hazard[base_hazard<=0] <- 0.01
+LOS <- rexp(n, rate = base_hazard)    # generate length of stay
+data_qr <- data.frame(LOS, severity, intervention)
+```
+
+We effectively made:
+- Lower severity and intervention (maybe a care process improvement) -> lower hazard? Actually, in exponential, a lower rate means longer stay, whoops. Let's think:
+Actually, rate = hazard, higher hazard => shorter stays (since event occurs sooner).
+We did base_hazard = 0.1 +0.3*severity -0.05*intervention.
+So:
+  - At severity=0, control: hazard=0.1 -> mean LOS=10 days.
+  - severity=1, control: hazard=0.4 -> mean LOS=2.5 days (more severe = shorter? That’s counterintuitive; maybe severity should increase LOS (lower hazard). Let's flip sign:
+Better: base_rate = 0.2 - 0.1*severity - 0.05*intervention, but ensure positivity.
+  
+Let's adjust:
+```r
+base_rate <- 0.2 - 0.1*severity - 0.05*intervention
+base_rate[base_rate < 0.01] <- 0.01
+LOS <- rexp(n, rate = base_rate)
+data_qr <- data.frame(LOS, severity, intervention)
+```
+Now:
+- severity up -> rate down -> longer stays (makes sense: high severity -> slower discharge).
+- intervention -> subtract hazard -> presumably extends length? If intervention is something that *reduces* hazard (maybe a treatment that keeps them longer? Actually we want intervention to shorten stays, so it should increase hazard of discharge. So add 0.05 for intervention rather than subtract.)
+Let's do:
+```r
+base_rate <- 0.2 - 0.1*severity + 0.05*intervention  # intervention increases rate (shortens stay)
+base_rate[base_rate < 0.01] <- 0.01
+LOS <- rexp(n, rate = base_rate)
+data_qr <- data.frame(LOS, severity, intervention)
+```
+Now:
+- severity: hazard goes down with severity, so severe -> longer stays (makes sense).
+- intervention: hazard goes up, so intervention -> shorter stays.
+
+Because exponential yields a lot of short stays with some long outliers, it’s skewed. We’ll attempt median vs 90th quantile regression.
+
+### Assumption Checking
+Quantile regression doesn't have distribution assumptions, but we still ensure:
+- Independence is given as we simulated i.i.d.
+- Possibly check linearity: maybe the effect of severity on high quantile vs median might not be linear if one suspects threshold. We can inspect by fitting quantile models and checking residual patterns but quantile residuals are not as straightforward. One can do a plot of fitted vs actual for median to see if systematic biases in certain ranges.
+- Check for crossing quantiles: If we fit multiple quantiles, ensure they make sense (we can fit 0.5 and 0.9 and see if predicted 0.5 is always <= predicted 0.9; if not, there's crossing).
+- Multi-collinearity check (not an issue with only 2 preds).
+- Enough data in tails for high quantile estimate reliability (if extreme quantile, need larger N).
+
+### Model Interpretation
+We’ll fit median (τ=0.5) and 90th percentile (τ=0.9):
+
+```r
+library(quantreg)
+med_fit <- rq(LOS ~ severity + intervention, data=data_qr, tau=0.5)
+q90_fit <- rq(LOS ~ severity + intervention, data=data_qr, tau=0.9)
+summary(med_fit)
+summary(q90_fit)
+```
+
+Expected results qualitatively:
+- For median: since median of exponential ~ ln(2)/rate, higher severity (lower rate) -> longer median. We anticipate a positive coefficient for severity (if severity  up, LOS up). Similarly, intervention likely negative (intervention shortens median LOS).
+- For 90th quantile: likely even stronger effect of severity (because severe cases produce very long stays on upper end).
+- Possibly the intervention effect on 90th might be smaller if intervention mainly affects typical patients but extreme stays might be due to complications not prevented by intervention. But in our sim, it linearly affects hazard so it should also reflect in 90th.
+
+Let's conceptual results:
+The linear model: LOS = β0 + β1*severity + β2*intervention at that quantile.
+We can't easily derive the actual values from hazard formula; better to rely on summary prints. But we guess:
+- Median: intercept maybe around median when severity=0,int=0. If base_rate=0.2 then median ~ ln2/0.2 ~3.465. Possibly intercept ~3.5. 
+- β1 for severity: maybe around  something like each 1 increase severity maybe adds a couple days to median. Possibly positive ~ maybe 1-2 days effect. 
+- β2 for intervention: likely negative (reduces median by some fraction).
+- 90th quantile: intercept will be higher (~ maybe 90th for base_rate 0.2, which is log(10)/0.2 ~ maybe 11.5 days? Actually quantile formula for exponential: q(p) = -log(1-p)/rate, for p=0.9: -log(0.1)/0.2 = (2.3026)/0.2 = 11.513 days).
+   So intercept maybe ~11.5.
+- Severity effect likely bigger (for p=0.9, with lower rate for severity=1: if base_rate=0.1, 90th quantile = -log(0.1)/0.1 = 23.0 days; difference ~11.5 to 23 ~ +11.5 for severity from 0 to 1).
+   So β1 maybe ~ +11.
+- Intervention effect at 90th: for base_rate=0.25 vs 0.15, 90th = -log(0.1)/0.25=9.21 vs -log(0.1)/0.15=15.35, difference ~6.14 days, direction negative for intervention group (faster hazard means lower quantile).
+   So β2 ~ -6.
+- These are rough. Let's assume:
+   median: β1 ~ +4, β2 ~ -1 (just a guess)
+   90th: β1 ~ +12, β2 ~ -5.
+
+Interpretation:
+- Median LOS: "Severity significantly increased median LOS (estimate ~ +X days per severity point, p<0.01), while intervention modestly reduced median LOS by ~Y days, though the effect might be small but significant given enough data." If p not significant, mention that.
+- 90th percentile LOS: "Severity had a much larger effect on the 90th percentile of LOS – high-severity patients had extremely longer stays (estimate ~ +12 days at 90th percentile, meaning the 90th percentile LOS for very severe patients was ~12 days longer than for low severity, p<0.001). The intervention reduced the 90th percentile of LOS by ~5-6 days, indicating it particularly helped to avoid very long stays."
+
+Crucially, quantile regression results are in absolute terms (days) for the quantile difference, not a ratio. So we say differences in days.
+
+### Communicating Results
+- **Specify which quantile**: "median" or "90th percentile" etc.
+- **Effect sizes in original units**: Since quantile regression coefficients are differences in outcome, we present them as such. E.g., "Intervention was associated with a 1-day reduction in median LOS (95% CI [...], p=0.05)" or "At the 90th percentile, the intervention group had LOS about 6 days shorter than controls."
+- **Compare differences**: One key insight might be that intervention doesn't change median much but significantly shortens the tail of distribution (which could mean it prevents very long outliers).
+- **No distribution assumption**: One can mention "quantile regression was used because LOS distribution is skewed; it makes no normality assumption ([Quantile Regression](https://www.ibm.com/docs/en/spss-statistics/saas?topic=regression-quantile#:~:text=predictor%20is%20required%20to%20run,Related%20procedures))."
+- **Interpretation caution**: We shouldn't interpret quantile coefficients as affecting individual patients in that way; it's affecting the distribution. But it's usually fine to say "for a patient with given severity, being in intervention group is associated with being lower in the LOS distribution – e.g., their median outcome is shorter." 
+- **If multiple quantiles**: Sometimes it's helpful to report both median and 90th results side by side to show how effects differ. Possibly note "The effect of severity is much larger on the upper end of LOS than on the median, indicating heteroscedasticity – severe cases disproportionately contribute to long hospitalizations."
+- **Model fit**: There's no R² analog that’s straightforward, but some pseudo-R² exist (like Koenker & Machado's). Not always reported, but could mention something like "Severity explained a substantial portion of variation in longer LOS."
+- **Confidence intervals**: Use rank inversion method from summary. Provide those for precision.
+- Summarize: E.g., "For patients at the 90th percentile of LOS, the new protocol reduced LOS by ~5.5 days (95% CI 1.2–9.8 days), whereas the reduction at the median was only ~1 day (95% CI -0.2–2.2 days)."
+
+This highlights differences in effect along distribution.
+
+Now to bounded proportion data.
+
+## Analysis of Bounded Proportion Data (Beta Regression)
+
+### Overview
+When outcomes are proportions bounded between 0 and 1 (exclusive), such as a fractional area of lung affected, ejection fraction, or proportion of days adherent to medication, a **Beta regression** is often appropriate. Beta regression assumes the outcome $Y \in (0,1)$ follows a Beta distribution conditional on covariates ([Beta regression - Wikipedia](https://en.wikipedia.org/wiki/Beta_regression#:~:text=Beta%20regression%20,deviance)). It models the mean of $Y$ (often via a logit or log link) as a function of predictors, and can also model dispersion. This is preferred over linear regression because proportions often have heteroskedasticity (variance depends on mean) and bounds at 0 and 1 that linear models might violate ([Beta regression - Wikipedia](https://en.wikipedia.org/wiki/Beta_regression#:~:text=Beta%20regression%20has%20three%20major,so%20the%20interpretation%20is%20in)) ([Beta regression - Wikipedia](https://en.wikipedia.org/wiki/Beta_regression#:~:text=It%20is%20also%20notable%20that,1)).
+
+For example, if we study fraction of a lesion that is fibrous tissue, values are 0 to 1; Beta regression (using logit link) will ensure predicted proportions stay in (0,1) and account for the typical increasing variance near 0.5 and lower variance near 0 or 1 ([Beta regression - Wikipedia](https://en.wikipedia.org/wiki/Beta_regression#:~:text=Beta%20regression%20has%20three%20major,displaystyle%20y%27%7D%20rather)) ([How do I perform diagnostic checks on a beta regression? - Cross Validated](https://stats.stackexchange.com/questions/332648/how-do-i-perform-diagnostic-checks-on-a-beta-regression#:~:text=Comparing%20it%20to%20ordinary%20least,would%20in%20an%20OLS%20regression)).
+
+Harrell includes proportions in modeling strategies and might suggest either transforming (logit transform and using linear model) or directly using Beta regression. Beta regression has become a standard approach because it directly models mean-variance relationship and provides interpretable effects on the log-odds scale of the proportion.
+
+### Model Assumptions
+- **Beta distribution for Y**: $Y|X \sim \text{Beta}(\mu(X)\phi, (1-\mu(X))\phi)$ where $\mu(X)$ is the mean (a function of X) and $\phi$ is a precision parameter. This implies $Var(Y|X) = \mu(1-\mu)/(1+\phi)$, so variance is a function of mean (heteroscedasticity inherently) ([Beta regression - Wikipedia](https://en.wikipedia.org/wiki/Beta_regression#:~:text=It%20is%20also%20notable%20that,1)).
+- **Correct link function**: Typically logit link for $\mu(X)$ (so linear model for log-odds of proportion). Could also use log link for certain contexts (if proportion is like a rate).
+- **No observations exactly 0 or 1**: Standard Beta regression cannot handle true 0 or 1 because the beta distribution is only on (0,1). If data has 0/1, those often need to be adjusted (e.g., transform (y*(n-1)+0.5)/n or use zero-one-inflated models). Assuming none or that we've done such a transformation.
+- **Independent observations**: as usual.
+- **Linearity of link**: Covariate effects are linear on logit (if using logit link).
+- **Dispersion**: In simplest Beta reg, constant precision $\phi$. If dispersion varies with covariates, one can model $\phi$ as function of X too (variable dispersion model) ([Beta regression - Wikipedia](https://en.wikipedia.org/wiki/Beta_regression#:~:text=There%20is%20also%20variable%20dispersion,following%20three%20specific%20variable%20dispersion)). We assume either constant or properly modeled.
+- If using logit link, essentially assumptions similar to logistic for functional form, but now for continuous Y in (0,1).
+- Model need adequate sample size because beta MLE can be sensitive if data clusters near 0 or 1.
+
+Check assumptions:
+- **Residuals**: Beta reg has Pearson or deviance residuals; we can plot fitted vs residual to see any pattern (like if variance modeling needed).
+- **Link linearity**: e.g., if outcome vs continuous X shows non-logit-linearity, consider adding poly or splines.
+- **Heteroscedasticity**: If residuals vs fitted show non-constant spread that correlates with X, may need variable $\phi$.
+- The Beta regression output usually includes pseudo R² (like likelihood pseudo R²).
+- If any 0/1 were present, ensure we handled them (e.g., add tiny epsilon).
+- With multiple covariates, ensure no perfect separation analog (though with continuous outcome, separation not exactly concept).
+
+### Simulated Dataset
+Simulate a proportion outcome: e.g., proportion of a tissue that is necrotic, depending on treatment and marker.
+We ensure outcome is in (0,1).
+
+```r
+set.seed(456)
+n <- 200
+marker <- runif(n, 0, 1) 
+group <- rbinom(n, 1, 0.5)
+# True model: logit(p) = -1 + 2*marker - 1*group
+eta <- -1 + 2*marker - 1*group
+p <- boot::inv.logit(eta)  # true mean proportion
+phi <- 20  # precision
+# Simulate beta by sampling from Beta(alpha, beta) with alpha = p*phi, beta = (1-p)*phi
+alpha <- p * phi
+beta <- (1-p) * phi
+y <- rbeta(n, alpha, beta)
+# Ensure no exact 0/1
+range(y)
+data_beta <- data.frame(y, marker, group)
+```
+
+We used $\phi=20$ which gives some variability but not super extreme (higher φ = less variance around mean). With φ=20, variance ~ p(1-p)/(1+20), roughly p(1-p)/21, so moderate.
+
+### Assumption Checking
+We can use `betareg` package:
+```r
+library(betareg)
+beta_fit <- betareg(y ~ marker + factor(group), data=data_beta)
+summary(beta_fit)
+```
+Check:
+- Does it detect any pattern in residuals:
+```r
+par(mfrow=c(1,2))
+plot(beta_fit, which=1:2)  # residuals vs fitted, Normal QQ of residuals (though normality not required, QQ may check heavy tails in residuals)
+```
+Often, the residual vs fitted shows if variance is modeled okay. If we see funnel, maybe φ not constant. Could try `betareg(y ~ ... | marker)` to model φ.
+But since we simulated constant φ, likely fine.
+
+Check 0/1: none likely since Beta rarely outputs exactly 0 or 1 except asymptotically.
+
+### Model Interpretation
+Expect coefficients ~:
+- (Intercept) ~ -1 (true logit when marker=0, group=0).
+- marker ~ +2 (we set that).
+- group (factor1) ~ -1 (treatment group coded 1 has lower logit p).
+Precision φ ~ ~20 (maybe estimate close to that ~ e.g., 18-22).
+
+Interpretation:
+- On logit scale: intercept -1 → baseline (marker=0, control group) mean p ~ exp(-1)/(1+exp(-1)) = 0.268.
+- marker 2 → for each 1.0 increase in marker, log-odds up by 2, OR = 7.39, which is huge. If marker is 0 to 1, that means at marker=1, logit difference =2, probability goes to ~0.731. So marker being high raises proportion.
+- group -1 → group=1 has logit 1 unit lower than group=0. That corresponds to OR=0.37 on odds of proportion, meaning group1 (maybe treatment) has lower proportion outcome. At baseline marker, probability would be ~0.268 vs treat ~0.184.
+- We might convert logit effects into differences in mean proportion at some reference marker values:
+   - For example, at marker=0.5: control logit = -1+2*0.5 = 0, p=0.5; treat logit = 0-1 = -1, p=0.27. So at marker 0.5, group difference ~0.23 (50% vs 27%).
+   - At marker=1: control p ~0.73, treat p ~0.53 (logit control 1, treat 0).
+   - At marker=0: control 0.268, treat 0.184.
+- So effect of marker and group on mean proportion can be described in terms of differences at meaningful points.
+
+Precision ~20: if reported, we can say it implies variance ~p(1-p)/21. Possibly not needed in main interpretation, but could mention model fit is fairly tight (phi large means data close around mean, phi small means data widely spread). Or report pseudo R²:
+`summary(beta_fit)$pseudo.r.squared` yields maybe something.
+
+### Communicating Results
+- **Mean effect**: Because of logit link, similar to logistic interpretation but now it’s about *mean proportion*. Often it's okay to interpret coefficients like logistic:
+  "Marker level was strongly associated with the proportion outcome (log-odds increase of ~2 per 1.0 marker, p<0.001). This means when the marker increases from 0 to 1, the expected proportion increases from ~27% to ~73% (if group=0)."
+- For group: "The treatment group had significantly lower mean proportion (OR 0.37 on the odds of proportion, translating to e.g., at marker=0.5, 27% vs 50% on average)."
+- Possibly simpler: use marginal effects:
+  - "In control group with average marker (0.5), predicted mean = 50%, whereas in treatment group it's ~27%."
+  - Or "At marker=0.5, the treatment was associated with 23 percentage-point lower proportion (50% vs 27%). The effect of treatment diminishes at higher marker values (at marker=1, 73% vs 53%)."
+- Beta regression can also yield "mean difference" but because of logit, differences depend on baseline. So might give two scenarios.
+- Could present an interaction-like description even if we didn't have an interaction, due to non-linear link: e.g., absolute difference is not constant across marker values.
+- **Precision**: If audience is technical, mention φ: "The precision parameter φ was estimated ~20, indicating moderately low variance around the mean (as φ →∞, variance→0)."
+- If significant dispersion effect was found, mention that and interpret (e.g., "higher marker also increased variability of the outcome, as indicated by a significant dispersion model term").
+- Emphasize values between 0 and 1, so any predicted >1 or <0 would indicate model issues (didn’t happen here).
+- Possibly mention pseudo R² (Cribari-Neto's) which summary gives. E.g., if pseudo-R² = 0.5, “The model explains about 50% of the (transformed) variance in the proportion.”
+- If comparing to simpler methods: "A linear model was not appropriate due to heteroscedasticity and bounds; beta regression better captures the data characteristics ([Beta regression - Wikipedia](https://en.wikipedia.org/wiki/Beta_regression#:~:text=Beta%20regression%20has%20three%20major,displaystyle%20y%27%7D%20rather))."
+
+Key is to provide interpretation in terms of actual proportions for clarity:
+- "Under the model, a unit increase in marker is associated with an increase in the expected proportion from 0.27 to 0.73 (when going from min to max marker in control)."
+- Or "The odds of proportion (like an odds that the tissue is 'occupied') increases by ~7.4 times when marker goes from min to max."
+
+Finally, Tobit.
+
+## Tobit Regression (Censored Continuous Data)
+
+### Overview
+Tobit regression (also called a censored regression model) is used when the outcome is a continuous variable that is **censored or truncated** at some value. Common example: a lab test with a detection limit – values below LOD are all reported as “< LOD”. Tobit models combine aspects of linear regression and binary probability of being censored.
+
+A Tobit model assumes an underlying latent variable $Y^*$ that follows a linear model, and the observed $Y = \max(Y^*, L)$ (for left-censoring at L) or $\min(Y^*, U)$ for right-censoring at U. It estimates the relationship accounting for the censored observations ([What are the assumptions for applying a Tobit regression model? - Cross Validated](https://stats.stackexchange.com/questions/5327/what-are-the-assumptions-for-applying-a-tobit-regression-model#:~:text=To%20echo%20Aniko%27s%20comment%3A%20The,me%3A%20boundedness%20and%20sample%20selection)). It’s preferred when a substantial fraction of data is censored but you believe a linear relationship for the underlying true values. For instance, in environmental exposures where many readings are below a detection limit, Tobit can provide unbiased estimates where simply dropping or substituting values could bias results.
+
+### Model Assumptions
+- **Latent linear model**: The true underlying variable $Y^*$ satisfies $Y^* = \beta_0 + \beta_1 X_1 + ... + \epsilon$, $\epsilon \sim N(0,\sigma^2)$ ([What are the assumptions for applying a Tobit regression model? - Cross Validated](https://stats.stackexchange.com/questions/5327/what-are-the-assumptions-for-applying-a-tobit-regression-model#:~:text=Tobit%20model%20assumes%20normality%20as,the%20probit%20model%20does)). So normality and homoscedasticity of the latent residuals is assumed, just like OLS.
+- **Censoring mechanism**: Data are censored at known threshold(s). We assume censoring is **non-informative** beyond being at the threshold (i.e., being censored is solely because $Y^*$ fell beyond threshold, not due to some other bias) ([What are the assumptions for applying a Tobit regression model? - Cross Validated](https://stats.stackexchange.com/questions/5327/what-are-the-assumptions-for-applying-a-tobit-regression-model#:~:text=In%20short%2C%20you%20probably%20want,are%20rather%20difficult%20to%20check)). For Tobit, typically either left-censored (below a lower bound) or right-censored at upper bound, or both.
+- **Independent observations** (and independent censoring across observations).
+- No severe multicollinearity, etc.
+
+Assumptions to check:
+- If fraction censored is high, normality assumption of $Y^*$ is hard to verify. But one can do something like look at distribution of uncensored part and guess if tail could be normal.
+- If residuals of uncensored appear non-normal or variance depends on X, model might mis-specify.
+- If proportion of censoring differs by X groups drastically, might consider that maybe a two-part model or selection model needed if assumptions fail.
+- Essentially same diagnostics as linear regression on the uncensored portion plus conceptual checks:
+   - e.g., do we believe those above threshold would have followed linear trend beyond threshold or is there a different process? If latter, Tobit might not hold.
+- There's a known assumption: one model governs both those below and above threshold ([What are the assumptions for applying a Tobit regression model? - Cross Validated](https://stats.stackexchange.com/questions/5327/what-are-the-assumptions-for-applying-a-tobit-regression-model#:~:text=To%20echo%20Aniko%27s%20comment%3A%20The,me%3A%20boundedness%20and%20sample%20selection)). If data generating process for being below threshold is different, Tobit isn't correct (that goes into selection models).
+- No censoring value that depends on X (if, say, detection limit varied by batch, ideally incorporate that or use variable censoring point).
+  
+### Simulated Dataset
+Simulate a scenario: outcome is normally distributed by linear model, but we only observe it above 0 (left-censor at 0). E.g., some score that can’t go below 0, and many zeros.
+
+```r
+set.seed(789)
+n <- 300
+X <- rnorm(n, 5, 2)  # some predictor
+# True model: Y* = 10 + 2*X + e, e ~ N(0,9), so SD=3
+y_star <- 10 + 2*X + rnorm(n, 0, 3)
+# Censor at 0 (left-censoring): if y* < 0, y = 0; else y = y*
+y_obs <- ifelse(y_star < 0, 0, y_star)
+mean(y_obs < 0.001)  # fraction censored
+data_tobit <- data.frame(y_obs, X)
+```
+
+Probably few are <0 given intercept 10 +2*X (X around 5 mean -> mean 20). Perhaps choose a higher censor point to get more censoring:
+Maybe censor at 15:
+```r
+y_obs <- ifelse(y_star < 15, 15, y_star)  # actually that means truncated below 15? Or easier, do right-censor at 20?
+```
+But question specifically says Tobit for censored/truncated continuous. Could be either left or right or both.
+
+We can illustrate left-censor (like detection limit at 0 in that sim, but low censor fraction).
+Better: we want significant censor fraction:
+Lower the intercept to get more left-censored:
+Use intercept = -5:
+```r
+y_star <- -5 + 2*X + rnorm(n, 0, 3)
+y_obs <- ifelse(y_star < 0, 0, y_star)
+mean(y_obs == 0) 
+```
+Now intercept -5 with X mean5-> mean latent ~5, so proportion <0 depends on distribution. Let's check:
+X~N(5,2): if X=5, E[y*]= -5+2*5=5. At X lower, y* might go negative if e large neg.
+Should get some portion.
+
+Alternatively simulate something like distribution with certain percent left-censored:
+We can ensure ~ say 15% left-censored by adjusting intercept.
+
+We can skip fine tuning and proceed.
+
+### Assumption Checking
+We fit Tobit using `survreg` from survival (with dist="gaussian") or package AER's `tobit`.
+
+```r
+library(AER)
+tobit_fit <- tobit(y_obs ~ X, data=data_tobit, left=0, right=Inf)
+summary(tobit_fit)
+```
+
+We expect:
+- Estimate for intercept ~ true -5, slope ~2, error scale ~3.
+- If censorship fraction is moderate, estimates should be close to true.
+
+Check normality:
+- Could extract residuals of uncensored cases: `resid(tobit_fit, type="deviance")` or something. Or better, do a QQ of standardized residuals from `survreg`.
+Alternatively:
+```r
+library(survival)
+survreg_fit <- survreg(Surv(y_obs, y_obs > 0, type="left") ~ X, data=data_tobit, dist="gaussian")
+# Actually Surv requires event indicator differently.
+# Format might be: Surv(time, event) with event 1 for uncensored? 
+```
+Using AER is simpler for summary.
+
+We should check:
+- Are uncensored residuals ~ normal? (We can approximate by looking at resid for those y_obs>0).
+- If there's heterosked, etc.
+
+### Model Interpretation
+Tobit output typically gives coefficients similar to linear:
+Say summary prints:
+```
+Estimate  Std.Err z value Pr(>|z|)
+(Intercept) -5.1    0.5   -10.2   <2e-16
+X            2.05   0.09   22.8   <2e-16
+Log(scale)   1.098  0.05   ...    ...
+Scale= e^(Log(scale)) ~3.0
+```
+Interpreting:
+- Intercept -5.1, slope 2.05 ~ close to true.
+- These coefficients pertain to the latent variable model $Y^*$. So we interpret like a linear regression:
+  - "Underlying $Y^*$ increases by ~2.05 for each 1-unit increase in X."
+  - "Intercept -5.1 means at X=0, the latent mean would be -5.1 (though observe that many such values are censored at 0)."
+- We might convert that to observed scale: The marginal effect on observed Y isn't as straightforward because of censoring. But one can say "For each increase in X, the expected outcome increases, and also the probability of being above 0 increases." Possibly mention effect on probability of being uncensored:
+   - The Tobit can derive an implied prob(censored) decrease with X. It's like a two-part model embedded. We could compute at X values:
+   For example, at X=0, latent mean -5 -> most values below 0, maybe high censor fraction. At X=10, latent mean 15 -> mostly uncensored.
+   - Probability of being uncensored = P(Y* >0) = P(Z > -(β0+β1 X)/σ) for Z~N(0,1). Could mention how X influences this.
+- The tobit can also produce partial effect on observed E(Y). If needed, one can say "At X=some, probability of event is .., conditional mean if uncensored is .., thus overall E(Y) is..."
+But that might be too technical.
+
+Simpler:
+- If interest is in effect on latent Y*, treat as linear regression: "coefficient 2.05 suggests strong positive association."
+- Also note number of censored: "We had XX observations left-censored at 0. The Tobit model uses that information, unlike a standard linear regression on uncensored only which would be biased."
+
+In communication:
+- Summarize both aspects: "The model estimates that for each unit increase in X, the true underlying outcome increases by about 2.05 on average (p<0.001). Additionally, higher X also decreases the probability of being at the floor (0). For instance, at X=0 the model-predicted probability of Y being 0 is high (~maybe 84%, depending on parameters), whereas at X=5 it is much lower (~maybe 30%)."
+- If possible, illustrate by computing such probabilities:
+   p(censored|X=0) = Φ((0 - (-5.1+2.05*0))/3) = Φ((5.1)/3) = Φ(1.7) ~0.955 (maybe 95.5% at X=0).
+   p(censored|X=5) = Φ((0 - (-5.1+2.05*5))/3) = Φ((0 - ( -5.1+10.25))/3) = Φ(( -5.1+10.25 )/3?) Actually at X=5: latent mean = -5.1+10.25=5.15, P(censored) = P(Y*<0) = P(Z < (0-5.15)/3) = P(Z < -1.717) = 0.043. So drastically drop.
+So yes at X=0 ~0.955, X=5 ~0.043 censored.
+- So: "At X=0, ~95% of observations are predicted to be left-censored at 0, whereas at X=5 almost all are above 0. That illustrates how X influences both the occurrence of 0 and the magnitude of Y above 0."
+- This kind of interpretation helps show effect.
+
+- **Scale (σ)**: The residual SD ~3 indicates variability around the regression line. Could mention if needed: "There is considerable unexplained variability (σ ≈3)."
+- Emphasize that Tobit allows correct use of all data including censored, which increases power and reduces bias ([What are the assumptions for applying a Tobit regression model? - Cross Validated](https://stats.stackexchange.com/questions/5327/what-are-the-assumptions-for-applying-a-tobit-regression-model#:~:text=To%20echo%20Aniko%27s%20comment%3A%20The,me%3A%20boundedness%20and%20sample%20selection)).
+
+### Communicating Results
+- State that a Tobit model was used: "Using a Tobit regression to account for [left/right]-censoring at [threshold], we found..."
+- Provide coefficient estimates and interpret them in context:
+  * "X was significantly associated with the underlying [outcome] (β = 2.05, SE 0.09, p<0.001). This suggests that if X increases by 1 unit, the true [outcome] would increase by ~2.05 units on average."
+- If needed, describe effect on probability of censoring (especially if a lot of censored):
+  * "In this dataset, values below 0 were censored. The model estimates that at X=0, most outcomes are below 0 (latent mean -5.1). As X increases, the chance of being above 0 increases markedly."
+- Possibly present expected values: "For example, at X=3, the expected latent [outcome] is ~1.1. The probability of observing a censored value (0) at X=3 is P(Y*<0) = ... (approx 20%). Meanwhile at X=6, expected latent ~7.1, virtually all observations would be uncensored."
+- If talking to a statistical audience, mention the log-likelihood or pseudo-R² or number of censored vs total.
+- If any assumption concerns: "We assume the residuals follow a normal distribution. We checked and found no major deviations (residuals of uncensored points roughly normal)."
+- If scenario is detection limit: "Tobit model accounts for  nondetects rather than treating them as zero or dropping them, providing a more accurate estimate ([What are the assumptions for applying a Tobit regression model? - Cross Validated](https://stats.stackexchange.com/questions/5327/what-are-the-assumptions-for-applying-a-tobit-regression-model#:~:text=To%20echo%20Aniko%27s%20comment%3A%20The,me%3A%20boundedness%20and%20sample%20selection))."
+
+Comparatively, one might say how a standard linear regression on uncensored data gave slope maybe ~2.5 (biased upward because ignoring censored being mostly lower Y*), whereas Tobit properly estimates ~2.05.
+
+Finally, in the **Communication** sections for each model, ensure to mention interpretation for both technical (numbers, CI, significance) and semi-technical (direction, magnitude in plain terms) audiences, and mention any precautions (like not misinterpreting OR vs RR, or PH assumption, etc.), as done above.
+
+We have thoroughly covered each model in the requested structure, demonstrating overview, assumptions, R code with simulation, assumption checks, interpretation and communication tips, in line with Harrell's principles of careful modeling and interpretation.
+

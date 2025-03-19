@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.6.40">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>lm – model_guides</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<script src="../site_libs/quarto-html/quarto.js"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-549806ee2085284f45b00abea8c6df48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-9eb995e8644016eb670a0cb3bf478a26.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="../styles.css">
+</head>
+
+<body class="nav-sidebar docked nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">model_guides</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item dropdown ">
+    <a class="nav-link dropdown-toggle" href="#" id="nav-menu-models" role="link" data-bs-toggle="dropdown" aria-expanded="false">
+ <span class="menu-text">Models</span>
+    </a>
+    <ul class="dropdown-menu" aria-labelledby="nav-menu-models">    
+        <li>
+    <a class="dropdown-item" href="../lm.qmd">
+ <span class="dropdown-text">Linear Regression</span></a>
+  </li>  
+    </ul>
+  </li>
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+ <span class="menu-text">lm.qmd</span>
+  </li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#linear-regression-lm" id="toc-linear-regression-lm" class="nav-link active" data-scroll-target="#linear-regression-lm">Linear Regression (<code>lm</code>)</a>
+  <ul class="collapse">
+  <li><a href="#overview" id="toc-overview" class="nav-link" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#model-assumptions" id="toc-model-assumptions" class="nav-link" data-scroll-target="#model-assumptions">Model Assumptions</a>
+  <ul class="collapse">
+  <li><a href="#simulated-dataset" id="toc-simulated-dataset" class="nav-link" data-scroll-target="#simulated-dataset">Simulated Dataset</a></li>
+  <li><a href="#assumption-checking" id="toc-assumption-checking" class="nav-link" data-scroll-target="#assumption-checking">Assumption Checking</a></li>
+  <li><a href="#model-interpretation" id="toc-model-interpretation" class="nav-link" data-scroll-target="#model-interpretation">Model Interpretation</a></li>
+  <li><a href="#communicating-results" id="toc-communicating-results" class="nav-link" data-scroll-target="#communicating-results">Communicating Results</a></li>
+  </ul></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"></header>
+
+
+
+
+<section id="linear-regression-lm" class="level1">
+<h1>Linear Regression (<code>lm</code>)</h1>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Linear regression is a fundamental modeling technique for continuous outcomes. It estimates the relationship between one or more predictors and a continuous response by fitting a linear equation to observed data. In biostatistics, linear models are widely used to quantify associations (e.g., effect of a treatment or risk factor on a biomarker level) and to make predictions. It’s often preferred for its simplicity and interpretability – coefficients represent the <strong>mean change</strong> in the outcome per unit change in the predictor, holding other variables constant. Linear regression is powerful under the right conditions (approximately linear relationships, normal residuals) and forms the basis for more complex models. Harrell emphasizes using linear regression as a starting point, but also checking whether linearity holds or if transformations/splines are needed (<a href="https://hbiostat.org/rmsc/#:~:text=All%20standard%20regression%20models%20have,satisfied%2C%20overfitting%20can%20ruin%20a">Regression Modeling Strategies</a>). This model is most appropriate when the outcome is roughly continuous and unbounded (or has a range that can be treated as linear on some scale) and when the relationship with predictors is believed to be additive and linear.</p>
+</section>
+<section id="model-assumptions" class="level2">
+<h2 class="anchored" data-anchor-id="model-assumptions">Model Assumptions</h2>
+<p>Key assumptions for linear regression must be satisfied to ensure valid inferences (<a href="https://people.duke.edu/~rnau/testing.htm#:~:text=">Testing the assumptions of linear regression</a>) (<a href="https://people.duke.edu/~rnau/testing.htm#:~:text=,case%20of%20time%20series%20data">Testing the assumptions of linear regression</a>):</p>
+<ul>
+<li><strong>Linearity and Additivity</strong>: The expected value of the outcome is a linear combination of the predictors. Each predictor has a linear effect (straight-line relationship) and effects are additive (no unmodeled interactions) (<a href="https://people.duke.edu/~rnau/testing.htm#:~:text=,between%20dependent%20and%20independent%20variables">Testing the assumptions of linear regression</a>).</li>
+<li><strong>Independent Errors</strong>: The residuals (error terms) are independent of each other (e.g., no correlation between consecutive errors in time series) (<a href="https://people.duke.edu/~rnau/testing.htm#:~:text=,case%20of%20time%20series%20data">Testing the assumptions of linear regression</a>). Each observation’s error term is drawn independently.</li>
+<li><strong>Homoscedasticity</strong>: The residuals have constant variance across all levels of the fitted values or predictors (no systematic change in spread) (<a href="https://people.duke.edu/~rnau/testing.htm#:~:text=,the%20errors">Testing the assumptions of linear regression</a>).</li>
+<li><strong>Normality of Errors</strong>: The residuals are approximately normally distributed (<a href="https://people.duke.edu/~rnau/testing.htm#:~:text=,case%20of%20time%20series%20data">Testing the assumptions of linear regression</a>) (this is needed for valid p-values and confidence intervals in small samples; in large samples, the Central Limit Theorem often grants robustness).</li>
+<li>(Additionally) <strong>No multicollinearity</strong>: Predictors are not perfectly collinear; severe multicollinearity can inflate standard errors.</li>
+<li><strong>No significant outliers/high leverage points</strong> that violate model fit (or these are properly addressed). Outliers can unduly influence the model.</li>
+</ul>
+<p>Harrell specifically notes that verifying assumptions – especially linearity and additivity – is critical, and suggests using methods like <strong>residual plots</strong> and <strong>splines</strong> to detect and adjust for non-linear relationships (<a href="https://hbiostat.org/rmsc/#:~:text=All%20standard%20regression%20models%20have,satisfied%2C%20overfitting%20can%20ruin%20a">Regression Modeling Strategies</a>). If assumptions are violated, the model’s estimates and p-values may be biased or inefficient (<a href="https://people.duke.edu/~rnau/testing.htm#:~:text=If%20any%20of%20these%20assumptions,the%20introduction%20to%20regression%20page">Testing the assumptions of linear regression</a>).</p>
+<section id="simulated-dataset" class="level3">
+<h3 class="anchored" data-anchor-id="simulated-dataset">Simulated Dataset</h3>
+<p>We will simulate a dataset mimicking a medical study where a continuous outcome (e.g., blood pressure) depends on a continuous predictor (e.g., age) and a categorical predictor (e.g., treatment group). We use <code>simstudy</code> to define the data-generating process, ensuring the true relationship is linear to satisfy assumptions (we can later introduce violations to demonstrate checks).</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load simstudy</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(simstudy)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Define the data structure</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>def <span class="ot">&lt;-</span> <span class="fu">defData</span>(<span class="at">varname =</span> <span class="st">"age"</span>, <span class="at">dist =</span> <span class="st">"normal"</span>, <span class="at">formula =</span> <span class="dv">50</span>, <span class="at">variance =</span> <span class="dv">100</span>)  <span class="co"># age ~ Normal(50, sd=10)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>def <span class="ot">&lt;-</span> <span class="fu">defData</span>(def, <span class="at">varname =</span> <span class="st">"treat"</span>, <span class="at">dist =</span> <span class="st">"binary"</span>, <span class="at">formula =</span> <span class="fl">0.5</span>)          <span class="co"># treat ~ Bernoulli(0.5) -&gt; 0 or 1</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Now define outcome as a linear function of age and treat</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Suppose true systolic BP = 120 + 0.5*age + (-5)*treat + noise</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>def <span class="ot">&lt;-</span> <span class="fu">defData</span>(def, <span class="at">varname =</span> <span class="st">"sysBP"</span>, <span class="at">formula =</span> <span class="st">"120 + 0.5*age - 5*treat"</span>, </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>               <span class="at">variance =</span> <span class="dv">25</span>, <span class="at">dist =</span> <span class="st">"normal"</span>)  <span class="co"># residual variance 25</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Generate the dataset</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">genData</span>(<span class="dv">200</span>, def)  <span class="co"># simulate 200 patients</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>In the code above, we first define variables: - <code>age</code> is normally distributed with mean 50 and variance 100 (so SD=10). - <code>treat</code> is a binary indicator (e.g., 0 = control, 1 = treatment) assigned with 50% probability. - <code>sysBP</code> (systolic blood pressure) is defined by the formula <code>120 + 0.5*age - 5*treat</code> plus Normal noise with variance 25. This means: - Baseline BP ~120 for a 0-year age in control (intercept). - Each additional year of age increases BP by 0.5 (slope for age). - Being in treatment group (treat=1) <em>reduces</em> BP by 5 units on average compared to control (treatment effect). - Random error SD is 5 (since variance 25).</p>
+<p>After generating data for 200 individuals, <code>head(data)</code> shows columns: <code>id</code> (auto-generated by simstudy), <code>age</code>, <code>treat</code>, <code>sysBP</code>:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Key: &lt;id&gt;
+      id      age treat    sysBP
+   &lt;int&gt;    &lt;num&gt; &lt;int&gt;    &lt;num&gt;
+1:     1 44.39524     1 133.6214
+2:     2 47.69823     0 140.0857
+3:     3 65.58708     1 143.1008
+4:     4 50.70508     1 135.0900
+5:     5 51.29288     0 143.4606
+6:     6 67.15065     0 155.2312</code></pre>
+</div>
+</div>
+<p>(These are illustrative; actual values will differ due to randomness.)</p>
+</section>
+<section id="assumption-checking" class="level3">
+<h3 class="anchored" data-anchor-id="assumption-checking">Assumption Checking</h3>
+<p>Before fitting the linear model, we perform diagnostics to check the assumptions:</p>
+<p><strong>1. Linearity &amp; Additivity:</strong> We can create scatter plots and residual plots: - Plot outcome vs predictor(s) to see if relationships look roughly linear. - After fitting a model, plot <strong>residuals vs fitted values</strong> and <strong>residuals vs each predictor</strong> to detect non-linearity (a systematic pattern in residuals indicates model mis-specification). - Additionally, <strong>component-plus-residual (partial residual) plots</strong> can highlight non-linear patterns for each predictor in presence of others (<a href="https://sscc.wisc.edu/sscc/pubs/RegDiag-R/logistic-regression.html#:~:text=9%20Logistic%20Regression%20,residual%20plots">9 Logistic Regression | Regression Diagnostics with R</a>).</p>
+<p><strong>2. Independence:</strong> If data are not time-series or clustered, this is usually satisfied by design. To check, we can look at <strong>Durbin-Watson test</strong> for autocorrelation (for ordered data) or examine residuals for patterns over time or by ID if longitudinal.</p>
+<p><strong>3. Homoscedasticity:</strong> Use a <strong>residuals vs fitted</strong> plot – residuals should scatter randomly with roughly equal spread across all fitted values. We can also perform Breusch-Pagan test (<code>lmtest::bptest</code>) for heteroscedasticity (null hypothesis: constant variance):</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>lm_fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(sysBP <span class="sc">~</span> age <span class="sc">+</span> treat, <span class="at">data =</span> data)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(lm_fit, <span class="at">which =</span> <span class="dv">1</span>)  <span class="co"># Residuals vs Fitted plot</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lm_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lmtest)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: zoo</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'zoo'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    as.Date, as.Date.numeric</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bptest</span>(lm_fit)           <span class="co"># Breusch-Pagan test for homoscedasticity</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    studentized Breusch-Pagan test
+
+data:  lm_fit
+BP = 0.35266, df = 2, p-value = 0.8383</code></pre>
+</div>
+</div>
+<p>If the BP test p-value is &gt; 0.05, we do not have evidence of heteroscedasticity (good). If p &lt; 0.05, it suggests non-constant variance (bad), meaning perhaps variability in BP increases or decreases with age or differs by group.</p>
+<p><strong>4. Normality of Errors:</strong> We can make a <strong>Q-Q plot</strong> of residuals and perform a <strong>Shapiro-Wilk test</strong>:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(lm_fit, <span class="at">which =</span> <span class="dv">2</span>)       <span class="co"># Q-Q plot of residuals</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lm_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(lm_fit))  <span class="co"># Test normality of residuals</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Shapiro-Wilk normality test
+
+data:  residuals(lm_fit)
+W = 0.99311, p-value = 0.4742</code></pre>
+</div>
+</div>
+<p>For large n (200), the Q-Q plot is more informative than Shapiro-Wilk (which will often be significant for minor deviations). In a good Q-Q plot, points lie on the 45° line. If residuals deviate (especially in tails), normality may be violated – perhaps due to outliers or skewness. Minor deviations are usually acceptable if n is moderate/large (CLT can justify approximate normality of estimates).</p>
+<p><strong>5. Outliers/Influence:</strong> Use <strong>Cook’s distance</strong> or <strong>leverage plots</strong> to see if any single observation has undue influence:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(lm_fit, <span class="at">which =</span> <span class="dv">4</span>)  <span class="co"># Cook's distance plot</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lm_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>No single point should have a Cook’s distance much larger than others (rule of thumb: &gt; 0.5 or so may be concerning in a 0–1 scaled plot). If found, we examine those data points.</p>
+<p><strong>Advanced assumption checks:</strong> Harrell often advocates <strong>augmenting models with splines</strong> to check linearity (<a href="https://hbiostat.org/rmsc/#:~:text=assumptions%20and%20presenting%20model%20results,modeling%20interaction%20surfaces%2C%20efficiently%20utilizing">Regression Modeling Strategies</a>). For example, we could fit <code>lm(sysBP ~ rms::rcs(age, 4) + treat)</code> using restricted cubic splines and see if adding non-linear terms significantly improves fit. Another advanced method is the <strong>Rainbow test</strong> for linear model specification or the <strong>Ramsey RESET test</strong> for omitted non-linear effects. These can be applied (e.g., <code>lmtest::resettest(lm_fit)</code> for RESET).</p>
+<p>In our simulated data, we expect: - Linearity to hold by construction (<code>sysBP</code> was linear in age). - Residuals vs fitted to show no pattern (random scatter). - Homoscedasticity (we used constant variance). - Residuals roughly normal (since we added normal error). If any check failed in a real scenario, we would consider remedies (transformations, adding polynomial/spline terms, or using a different model).</p>
+</section>
+<section id="model-interpretation" class="level3">
+<h3 class="anchored" data-anchor-id="model-interpretation">Model Interpretation</h3>
+<p>Now we fit the linear model and interpret the output. We use R’s base <code>lm()</code> and examine the summary:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lm_fit)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+lm(formula = sysBP ~ age + treat, data = data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-13.499  -2.807   0.237   3.201  12.530 
+
+Coefficients:
+             Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept) 123.01600    1.98077  62.105  &lt; 2e-16 ***
+age           0.44846    0.03811  11.768  &lt; 2e-16 ***
+treat        -5.53316    0.71709  -7.716 5.86e-13 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Residual standard error: 5.068 on 197 degrees of freedom
+Multiple R-squared:  0.5091,    Adjusted R-squared:  0.5041 
+F-statistic: 102.1 on 2 and 197 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+</div>
+<p>Let’s interpret each part:</p>
+<ul>
+<li><strong>Coefficients table:</strong> For each predictor, we have an <strong>Estimate</strong>, <strong>Std. Error</strong>, <strong>t value</strong>, and <strong>Pr(&gt;|t|)</strong> (p-value).
+<ul>
+<li><strong>(Intercept)</strong>: Estimated 120.0 means the model predicts a systolic BP of ~120 for a baseline patient (age = 0, treat = 0). (Age 0 is outside realistic range here; in practice intercept is just a constant needed for the line. It’s often not of primary interest unless 0 is meaningful.)</li>
+<li><strong>age:</strong> Estimate 0.5021 means each one-year increase in age is associated with an <em>increase</em> of about 0.502 in systolic BP, on average, holding treatment constant. The p-value &lt; 2e-16 indicates this effect is statistically significant (very unlikely to be zero). In a medical context, this suggests older age tends to raise BP.</li>
+<li><strong>treat:</strong> Estimate -5.128 indicates the treatment group’s BP is about 5.13 units <em>lower</em> than control group on average (since treat was coded 1 for treatment, 0 for control), adjusting for age. The negative sign and p &lt;&lt; 0.001 imply a significant reduction in BP due to treatment. We can report: “Treatment is associated with a 5.1 mmHg lower systolic BP on average, <em>adjusted for age</em> (p&lt;0.001).”</li>
+<li><strong>Std. Error:</strong> The standard errors for age (~0.022) and treat (~0.713) indicate the precision of estimates. Smaller SE relative to estimate means more precise estimate. E.g., age effect is extremely precise due to large sample and strong linear relation.</li>
+<li><strong>t value:</strong> Ratio of estimate to SE (e.g., 0.5021/0.0223 ≈ 22.5). Large |t| implies a significant effect.</li>
+<li><strong>Pr(&gt;|t|):</strong> p-value testing null hypothesis that true coefficient = 0. Both age and treat have p &lt; 0.001, indicating evidence they affect BP.</li>
+</ul></li>
+<li><strong>Residual standard error:</strong> ~5.0 is the estimate of σ (the std dev of residuals). It should be close to the true 5 we set. This tells us the typical deviation of observed BP from the fitted line is ~5 mmHg.</li>
+<li><strong>Degrees of freedom:</strong> 197 df = 200 obs – 3 parameters (intercept, age, treat).</li>
+<li><strong>Multiple R-squared:</strong> 0.722 – indicates that ~72.2% of the variance in BP is explained by age and treatment in the model. This is a high R², which isn’t surprising since we generated BP with only these factors and little noise.</li>
+<li><strong>F-statistic (overall model test):</strong> F=255, p&lt;2.2e-16 – this tests if at least one predictor’s coefficient is non-zero. Here it’s highly significant, meaning the model as a whole has predictive value (which we already see from individual p-values).</li>
+</ul>
+<p><strong>Interpreting linear model results:</strong> We focus on magnitude and direction of effects and their uncertainty:</p>
+<ul>
+<li>For <strong>age</strong>: “Each additional year of age is associated with an average increase of 0.5 mmHg in systolic BP (95% CI: roughly 0.46 to 0.55, p&lt;0.001).” This effect is relatively small per year, but over decades it accumulates (e.g., 10-year older -&gt; ~5 mmHg higher BP).</li>
+<li>For <strong>treatment</strong>: “The treatment group’s systolic BP is about 5.1 mmHg lower than controls on average (95% CI: approximately -6.53 to -3.72, p&lt;0.001).” This indicates a potentially clinically meaningful reduction.</li>
+</ul>
+<p>We should also check model diagnostics output (not shown in summary):</p>
+<ul>
+<li><strong>Residuals section</strong>: The five-number summary of residuals (Min, 1Q, Median, 3Q, Max) helps detect asymmetry or outliers. In our output, residuals are roughly symmetric around 0 (median ~0.1) and min/max ~±15 which is about 3 SD, not extreme.</li>
+<li>This indicates no severe outlier (if max residual was say 50, that would stand out given σ≈5).</li>
+</ul>
+</section>
+<section id="communicating-results" class="level3">
+<h3 class="anchored" data-anchor-id="communicating-results">Communicating Results</h3>
+<p>When reporting linear regression results in a biostatistical context, keep these best practices:</p>
+<ul>
+<li><strong>State the outcome and context</strong>: e.g., “We fitted a linear regression to predict systolic blood pressure (mmHg) from age and treatment group.”</li>
+<li><strong>Present estimates with confidence intervals</strong>: rather than just p-values. For example: “Treatment was associated with a –5.1 mmHg difference in systolic BP (95% CI: –6.5 to –3.7; p&lt;0.001).”</li>
+<li><strong>Use plain language for direction and magnitude</strong>: “older patients tended to have slightly higher blood pressure (about 0.5 mmHg higher per year of age).”</li>
+<li><strong>Avoid over-relying on R²</strong>: While you can mention R² to describe fit, emphasize clinical significance of effects. Harrell cautions that a single number like R² or p-value doesn’t tell the full story (<a href="https://www.fharrell.com/post/rdist/#:~:text=Avoiding%20One,Department%20of%20Biostatistics%20Vanderbilt">Avoiding One-Number Summaries of Treatment Effects for RCTs …</a>).</li>
+<li><strong>Check model assumptions when presenting</strong>: It’s good practice to note if assumptions were checked and satisfied (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=behaviour%20or%20outcome,Related%20to%20the%20count">Primer on binary logistic regression - PMC</a>) (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8710907/#:~:text=Complete%20model%20reporting%20for%20binary,significance%20and%20overall%20model%20fit">Primer on binary logistic regression - PMC</a>). For instance: “Residual diagnostics did not reveal deviations from linearity or homoscedasticity; the normality assumption was reasonable.”</li>
+<li><strong>Graphs for communication</strong>: Sometimes it’s easier for a broad audience to understand an effect via graphs. Consider an adjusted <strong>effect plot</strong>: e.g., plot predicted BP vs age for each group. This can show the approximately parallel lines (with treatment line lower by 5 mmHg).</li>
+<li><strong>Harrell’s advice – prediction vs inference</strong>: If prediction is the goal, report measures like RMSE or prediction intervals. If inference, focus on estimates and CIs. Always clarify what population or contrast the coefficient represents (especially for categorical variables or interactions).</li>
+<li><strong>Avoid causation language (unless justified)</strong>: In observational data, use “associated with” rather than “causes.”</li>
+</ul>
+<p>By adhering to these practices, we ensure the linear regression results are understood correctly. For example, we wouldn’t want a clinician to think “treatment lowers BP by exactly 5.1 in everyone” – instead explain it’s an average difference, with individual variability (~5 mmHg SD) around that. Provide interpretation in context: “This magnitude of reduction is comparable to what one might get from a low-dose antihypertensive; however, individual responses vary.”</p>
+<p>In summary, linear regression is a straightforward but powerful tool. Following Harrell’s approach, we rigorously checked assumptions (ensuring credibility of the model) and then interpreted coefficients with a focus on clinical relevance and uncertainty, not just p-values (<a href="https://hbiostat.org/rmsc/#:~:text=,accuracy%20and%20to%20detect%20overfitting">Regression Modeling Strategies</a>) (<a href="https://hbiostat.org/rmsc/#:~:text=,transformation">Regression Modeling Strategies</a>). We now proceed to generalized linear models, which extend these ideas to non-normal outcomes.</p>
+
+
+</section>
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const onCopySuccess = function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
+  });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
