@@ -14,14 +14,6 @@ website:
           - text: "Linear Regression"
             href: qmds/lm.qmd
 
-  sidebar:
-    style: "docked"
-    search: true
-    contents:
-      - section: "Models"
-        contents:
-          - qmds/lm.qmd
-
 format:
   html:
     theme:
