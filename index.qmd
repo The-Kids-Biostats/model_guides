@@ -1,11 +1,7 @@
 ---
-title: "model_guides"
+title: "Model Guides"
 ---
 
-This is a Quarto website in development.
+This website contains in-depth guides pertaining to the appropriate use, assessment, interpretation and communication of various statistical models. 
 
-Stay tuned!
-
-```{r}
-1 + 1
-```
+While still in development, you can check out (still in development) the linear regression page [here](qmds/lm.qmd) 
