@@ -1,8 +1,11 @@
-/* css styles */
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;700&display=swap');
-
-body {
-    font-family: 'Barlow', sans-serif;
+.quarto-title-block .quarto-title-banner {
+  background-image: url(thekids.png);
+  background-size: 200px;
+  background-position: left;
+  background-repeat: no-repeat;
+  padding-left: 10px;
+  background-origin: content-box;
+  background-color: #1F3B73;
 }
 
 /* Note Callout (Azure Blue) */
@@ -68,3 +71,26 @@ body {
 .callout-important .callout-header .callout-icon-container .callout-icon {
     color: #F56B00 !important; /* Pumpkin primary */
 }
+
+.column-margin {
+  border: 2px solid #426EA8; /* Ensure the border wraps everything */
+  padding: 10px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  background-color: #a1b7d4; /* Optional: Ensure background is consistent */
+  position: relative;
+}
+
+.column-margin::before {
+  content: "Comment";
+  display: block;
+  background-color: #426EA8; /* Header background color */
+  color: white; /* Header text color */
+  padding: 10px;
+  text-align: center;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  margin: -10px -10px 10px -10px; /* Ensure alignment within the box */
+}
+
+

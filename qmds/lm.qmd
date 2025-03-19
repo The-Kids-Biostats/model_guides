@@ -113,17 +113,17 @@ summary(lm_fit)
 Let’s interpret each part:
 
 - **Coefficients table:** For each predictor, we have an **Estimate**, **Std. Error**, **t value**, and **Pr(>|t|)** (p-value). 
-  - **(Intercept)**: Estimated 120.0 means the model predicts a systolic BP of ~120 for a baseline patient (age = 0, treat = 0). (Age 0 is outside realistic range here; in practice intercept is just a constant needed for the line. It’s often not of primary interest unless 0 is meaningful.)
-  - **age:** Estimate 0.5021 means each one-year increase in age is associated with an *increase* of about 0.502 in systolic BP, on average, holding treatment constant. The p-value < 2e-16 indicates this effect is statistically significant (very unlikely to be zero). In a medical context, this suggests older age tends to raise BP.
-  - **treat:** Estimate -5.128 indicates the treatment group’s BP is about 5.13 units *lower* than control group on average (since treat was coded 1 for treatment, 0 for control), adjusting for age. The negative sign and p << 0.001 imply a significant reduction in BP due to treatment. We can report: “Treatment is associated with a 5.1 mmHg lower systolic BP on average, *adjusted for age* (p<0.001).”
+  - **(Intercept)**: Estimated 123.016 means the model predicts a systolic BP of ~123 for a baseline patient (age = 0, treat = 0). (Age 0 is outside realistic range here; in practice intercept is just a constant needed for the line. It’s often not of primary interest unless 0 is meaningful)
+  - **age:** Estimate 0.44846 means each one-year increase in age is associated with an *increase* of about 0.45 in systolic BP, on average, holding treatment constant. The p-value < 2e-16 indicates this effect is statistically significant (very unlikely to be zero). This suggests older age is associated with higher BP.
+  - **treat:** Estimate -5.53316 indicates the treatment group’s BP is about 5.53 units *lower* than control group on average (since treat was coded 1 for treatment, 0 for control), adjusting for age. The negative sign and p = 5.86e-13 imply a significant reduction in BP in the treatment group. We can report: “Treatment is associated with a 5.1 mmHg lower systolic BP on average, *adjusted for age* (p<0.001).”
   - **Std. Error:** The standard errors for age (~0.022) and treat (~0.713) indicate the precision of estimates. Smaller SE relative to estimate means more precise estimate. E.g., age effect is extremely precise due to large sample and strong linear relation.
   - **t value:** Ratio of estimate to SE (e.g., 0.5021/0.0223 ≈ 22.5). Large |t| implies a significant effect.
   - **Pr(>|t|):** p-value testing null hypothesis that true coefficient = 0. Both age and treat have p < 0.001, indicating evidence they affect BP.
 
 - **Residual standard error:** ~5.0 is the estimate of σ (the std dev of residuals). It should be close to the true 5 we set. This tells us the typical deviation of observed BP from the fitted line is ~5 mmHg.
 - **Degrees of freedom:** 197 df = 200 obs – 3 parameters (intercept, age, treat).
-- **Multiple R-squared:** 0.722 – indicates that ~72.2% of the variance in BP is explained by age and treatment in the model. This is a high R², which isn’t surprising since we generated BP with only these factors and little noise.
-- **F-statistic (overall model test):** F=255, p<2.2e-16 – this tests if at least one predictor’s coefficient is non-zero. Here it’s highly significant, meaning the model as a whole has predictive value (which we already see from individual p-values).
+- **Multiple R-squared:** 0.5091 – indicates that ~50.9% of the variance in BP is explained by age and treatment in the model. This is a relatively high R², which isn’t surprising since we generated BP with only these factors and little noise.
+- **F-statistic:** F=102.1 on 2, p<2.2e-16 – this tests if at least one predictor’s coefficient is non-zero. Here it’s highly significant, meaning the model as a whole has predictive value (which we already see from individual p-values).
 
 **Interpreting linear model results:** We focus on magnitude and direction of effects and their uncertainty:
 

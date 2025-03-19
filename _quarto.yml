@@ -3,7 +3,7 @@ project:
   output-dir: docs
 
 website:
-  title: "model_guides"
+  title: "Model Guides for Biostatistics"
   navbar:
     left:
       - href: index.qmd
@@ -16,10 +16,21 @@ website:
 
 format:
   html:
-    theme:
-      - cosmo
-    css: styles.css
+    embed-resources: true
+    code-fold: true
     toc: true
+    toc-location: left
+    html-table-processing: none
+    self-contained: true
+    mainfont: "Barlow"
+    include-in-header:
+      text: |
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Barlow&display=swap');
+        </style>
+reference-location: margin
+citation-location: margin
+css: styles.css
 
 
 
