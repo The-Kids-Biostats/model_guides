@@ -2,9 +2,9 @@
 title: "model_guides"
 ---
 
-This is a Quarto website.
+This is a Quarto website in development.
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+Stay tuned!
 
 ```{r}
 1 + 1
